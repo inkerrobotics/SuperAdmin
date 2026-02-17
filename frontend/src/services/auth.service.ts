@@ -2,7 +2,7 @@ const API_URL = 'http://localhost:5001/api/auth';
 
 class AuthService {
   async login(email: string, password: string) {
-    const response = await fetch(`${API_URL}/super-admin/login`, {
+    const response = await fetch(`${API_URL}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

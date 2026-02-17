@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth.service';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function SuperAdminLogin() {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export default function SuperAdminLogin() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { setUser } = useAuth();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -15,7 +17,12 @@ export default function SuperAdminLogin() {
     setLoading(true);
 
     try {
-      await authService.login(email, password);
+      const response = await authService.login(email, password);
+      
+      // Store user in context and localStorage
+      setUser(response.user);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
       navigate('/dashboard');
     } catch (err: any) {
       setError(err.message || 'Login failed');

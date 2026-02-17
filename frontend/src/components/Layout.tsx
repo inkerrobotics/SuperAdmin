@@ -1,4 +1,5 @@
 import { useState, ReactNode } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import Sidebar from './Sidebar';
 
 interface LayoutProps {
@@ -7,6 +8,14 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user } = useAuth();
+
+  const getUserInitials = () => {
+    if (user?.name) {
+      return user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    return user?.email?.slice(0, 2).toUpperCase() || 'U';
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -39,7 +48,7 @@ export default function Layout({ children }: LayoutProps) {
                 {/* User Avatar (Desktop) */}
                 <div className="hidden sm:flex items-center space-x-2">
                   <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    SA
+                    {getUserInitials()}
                   </div>
                 </div>
               </div>

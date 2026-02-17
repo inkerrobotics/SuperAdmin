@@ -9,24 +9,56 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  role      Role
-  tenantId  String?
-  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
-  createdAt DateTime @default(now())
+  id           String      @id @default(uuid())
+  name         String?
+  email        String      @unique
+  password     String
+  role         Role
+  tenantId     String?
+  tenant       Tenant?     @relation(fields: [tenantId], references: [id])
+  customRoleId String?
+  customRole   CustomRole? @relation(fields: [customRoleId], references: [id])
+  systemSettings SystemSetting[]
+  settingHistory SettingHistory[]
+  emailTemplates EmailTemplate[]
+  createdAt    DateTime    @default(now())
 }
 
 model Tenant {
-  id                String        @id @default(uuid())
-  name              String
-  email             String        @unique
-  status            TenantStatus  @default(PENDING)
-  subscriptionPlan  String?
-  users             User[]
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  id               String       @id @default(uuid())
+  name             String
+  email            String       @unique
+  status           TenantStatus @default(PENDING)
+  subscriptionPlan String?
+  users            User[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model CustomRole {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  permissions RolePermission[]
+  users       User[]
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  id        String     @id @default(uuid())
+  roleId    String
+  role      CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  module    String
+  canView   Boolean    @default(false)
+  canCreate Boolean    @default(false)
+  canEdit   Boolean    @default(false)
+  canDelete Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([roleId, module])
 }
 
 enum Role {
@@ -40,4 +72,47 @@ enum TenantStatus {
   INACTIVE
   PENDING
   SUSPENDED
+}
+
+model SystemSetting {
+  id          String           @id @default(uuid())
+  category    String
+  key         String
+  value       String
+  dataType    String
+  description String?
+  updatedAt   DateTime         @updatedAt
+  updatedBy   String
+  updatedByUser User           @relation(fields: [updatedBy], references: [id])
+  history     SettingHistory[]
+  createdAt   DateTime         @default(now())
+
+  @@unique([category, key])
+}
+
+model SettingHistory {
+  id         String        @id @default(uuid())
+  settingId  String
+  setting    SystemSetting @relation(fields: [settingId], references: [id], onDelete: Cascade)
+  oldValue   String
+  newValue   String
+  changedBy  String
+  changedByUser User       @relation(fields: [changedBy], references: [id])
+  changedAt  DateTime      @default(now())
+  reason     String?
+}
+
+model EmailTemplate {
+  id           String   @id @default(uuid())
+  templateType String   @unique
+  subject      String
+  bodyHtml     String
+  bodyText     String
+  variables    String
+  isActive     Boolean  @default(true)
+  version      Int      @default(1)
+  updatedAt    DateTime @updatedAt
+  updatedBy    String
+  updatedByUser User    @relation(fields: [updatedBy], references: [id])
+  createdAt    DateTime @default(now())
 }

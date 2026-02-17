@@ -51,4 +51,57 @@ export class AuthService {
       }
     };
   }
+
+  async login(email: string, password: string) {
+    const user = await prisma.user.findUnique({ 
+      where: { email },
+      include: {
+        customRole: {
+          include: {
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      const error: any = new Error('Invalid credentials');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      const error: any = new Error('Invalid credentials');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const jwtSecret = process.env.JWT_SECRET || 'default-secret';
+    const jwtExpiry = (process.env.JWT_EXPIRES_IN || '24h') as string;
+    
+    const payload = { 
+      userId: user.id, 
+      email: user.email, 
+      role: user.role,
+      customRoleId: user.customRoleId
+    };
+    
+    const options: SignOptions = { 
+      expiresIn: jwtExpiry as any
+    };
+    
+    const token = jwt.sign(payload, jwtSecret, options);
+
+    return {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        customRole: user.customRole
+      }
+    };
+  }
 }
