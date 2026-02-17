@@ -11,6 +11,7 @@ import usersRoutes from './routes/users.routes';
 import activityLogsRoutes from './routes/activity-logs.routes';
 import notificationsRoutes from './routes/notifications.routes';
 import backupsRoutes from './routes/backups.routes';
+import sessionRoutes from './routes/session.routes';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/activity-logs', activityLogsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/backups', backupsRoutes);
+app.use('/api/sessions', sessionRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

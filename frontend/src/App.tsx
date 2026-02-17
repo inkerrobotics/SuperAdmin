@@ -8,6 +8,7 @@ import Settings from './pages/Settings';
 import ActivityLogs from './pages/ActivityLogs';
 import Notifications from './pages/Notifications';
 import Backups from './pages/Backups';
+import Sessions from './pages/Sessions';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/activity-logs" element={<ActivityLogs />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/backups" element={<Backups />} />
+          <Route path="/sessions" element={<Sessions />} />
           <Route path="/roles" element={<RolesManagement />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/tenant/:id" element={<TenantDetails />} />

@@ -2,9 +2,11 @@ import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient, Role } from '@prisma/client';
 import { ActivityLogsService } from './activity-logs.service';
+import { SessionService } from './session.service';
 
 const prisma = new PrismaClient();
 const activityLogsService = new ActivityLogsService();
+const sessionService = new SessionService();
 
 export class AuthService {
   async loginSuperAdmin(email: string, password: string, metadata?: { ipAddress?: string; userAgent?: string }) {
@@ -85,6 +87,17 @@ export class AuthService {
       ipAddress: metadata?.ipAddress,
       userAgent: metadata?.userAgent,
       status: 'success'
+    });
+
+    // Create session
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    await sessionService.createSession({
+      userId: user.id,
+      token,
+      ipAddress: metadata?.ipAddress,
+      userAgent: metadata?.userAgent,
+      expiresAt
     });
 
     return {
@@ -174,6 +187,17 @@ export class AuthService {
       ipAddress: metadata?.ipAddress,
       userAgent: metadata?.userAgent,
       status: 'success'
+    });
+
+    // Create session
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    await sessionService.createSession({
+      userId: user.id,
+      token,
+      ipAddress: metadata?.ipAddress,
+      userAgent: metadata?.userAgent,
+      expiresAt
     });
 
     return {

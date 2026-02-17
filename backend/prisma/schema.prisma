@@ -33,6 +33,7 @@ model User {
   TenantProfile        TenantProfile[]
   Campaign             Campaign[]
   emailLogs            EmailLog[]
+  sessions             Session[]
 }
 
 model Tenant {
@@ -305,4 +306,29 @@ model EmailLog {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token         String    @unique
+  deviceName    String?
+  deviceType    String?
+  browser       String?
+  os            String?
+  ipAddress     String?
+  location      String?
+  isActive      Boolean   @default(true)
+  lastActivity  DateTime  @default(now())
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedBy     String?
+  revokedReason String?
+
+  @@index([userId])
+  @@index([token])
+  @@index([isActive])
+  @@index([expiresAt])
 }
