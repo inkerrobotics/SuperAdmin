@@ -28,6 +28,8 @@ export const createUser = async (req: Request, res: Response) => {
     const ipAddress = req.ip || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'];
 
+    console.log('Creating user with data:', JSON.stringify(req.body, null, 2));
+
     const user = await usersService.createUser(req.body, {
       userId,
       ipAddress,
@@ -35,6 +37,7 @@ export const createUser = async (req: Request, res: Response) => {
     });
     res.status(201).json(user);
   } catch (error: any) {
+    console.error('Error creating user:', error);
     res.status(error.statusCode || 500).json({ message: error.message });
   }
 };

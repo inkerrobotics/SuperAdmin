@@ -45,8 +45,7 @@ export class TenantsService {
           },
           _count: {
             select: {
-              users: true,
-              Campaign: true
+              users: true
             }
           }
         },
@@ -86,7 +85,6 @@ export class TenantsService {
             createdAt: true
           }
         },
-        TenantProfile: true,
         statusHistory: {
           orderBy: {
             createdAt: 'desc'
@@ -96,8 +94,7 @@ export class TenantsService {
         _count: {
           select: {
             users: true,
-            Campaign: true,
-            ActivityLog: true
+            activityLogs: true
           }
         }
       }

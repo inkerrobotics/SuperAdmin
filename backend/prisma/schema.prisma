@@ -30,24 +30,20 @@ model User {
   createdAt            DateTime               @default(now())
   Notification         Notification[]
   NotificationTemplate NotificationTemplate[]
-  TenantProfile        TenantProfile[]
-  Campaign             Campaign[]
   emailLogs            EmailLog[]
   sessions             Session[]
 }
 
 model Tenant {
-  id               String              @id @default(uuid())
+  id               String                @id @default(uuid())
   name             String
-  email            String              @unique
-  status           TenantStatus        @default(PENDING)
+  email            String                @unique
+  status           TenantStatus          @default(PENDING)
   subscriptionPlan String?
   users            User[]
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  ActivityLog      ActivityLog[]
-  TenantProfile    TenantProfile?
-  Campaign         Campaign[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  activityLogs     ActivityLog[]
   statusHistory    TenantStatusHistory[]
 }
 
@@ -204,91 +200,6 @@ model Backup {
 
   @@index([status])
   @@index([createdAt])
-}
-
-model TenantProfile {
-  id             String    @id @default(uuid())
-  tenantId       String    @unique
-  tenant         Tenant    @relation(fields: [tenantId], references: [id])
-  companyName    String
-  companyLogo    String?
-  industry       String?
-  website        String?
-  phone          String?
-  address        String?
-  city           String?
-  state          String?
-  country        String?
-  zipCode        String?
-  contactPerson  String?
-  contactEmail   String?
-  contactPhone   String?
-  status         String    @default("pending")
-  approvedBy     String?
-  approvedByUser User?     @relation(fields: [approvedBy], references: [id])
-  approvedAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-}
-
-model Campaign {
-  id                String        @id @default(uuid())
-  tenantId          String
-  tenant            Tenant        @relation(fields: [tenantId], references: [id])
-  name              String
-  description       String?
-  type              String
-  status            String        @default("draft")
-  scheduledAt       DateTime?
-  startedAt         DateTime?
-  completedAt       DateTime?
-  autoStart         Boolean       @default(false)
-  reminderSent      Boolean       @default(false)
-  totalParticipants Int           @default(0)
-  totalWinners      Int           @default(0)
-  settings          String?
-  createdBy         String
-  createdByUser     User          @relation(fields: [createdBy], references: [id])
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  participants      Participant[]
-  winners           Winner[]
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([scheduledAt])
-}
-
-model Participant {
-  id          String   @id @default(uuid())
-  campaignId  String
-  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name        String
-  email       String?
-  phone       String?
-  status      String   @default("active")
-  isDuplicate Boolean  @default(false)
-  metadata    String?
-  createdAt   DateTime @default(now())
-
-  @@index([campaignId])
-  @@index([email])
-  @@index([phone])
-}
-
-model Winner {
-  id         String   @id @default(uuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name       String
-  email      String?
-  phone      String?
-  prize      String?
-  position   Int
-  notified   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-
-  @@index([campaignId])
 }
 
 model EmailLog {

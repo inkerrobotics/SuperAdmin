@@ -11,7 +11,6 @@ export interface Tenant {
   users: any[];
   _count?: {
     users: number;
-    Campaign: number;
   };
 }
 

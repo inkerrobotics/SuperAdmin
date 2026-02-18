@@ -120,17 +120,6 @@ export class DataCleaningService {
   async cleanupOrphanedData() {
     let totalCleaned = 0;
 
-    // Clean up notifications without valid users
-    const orphanedNotifications = await prisma.notification.deleteMany({
-      where: {
-        userId: {
-          not: null
-        },
-        user: null
-      }
-    });
-    totalCleaned += orphanedNotifications.count;
-
     // Clean up email logs without valid users
     const orphanedEmailLogs = await prisma.emailLog.deleteMany({
       where: {

@@ -16,7 +16,7 @@ export class SessionService {
     expiresAt: Date;
   }) {
     // Parse user agent
-    const parser = new UAParser(data.userAgent);
+    const parser = new (UAParser as any)(data.userAgent);
     const result = parser.getResult();
 
     return await prisma.session.create({

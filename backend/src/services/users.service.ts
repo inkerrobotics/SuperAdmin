@@ -124,50 +124,93 @@ export class UsersService {
     });
 
     // Log activity
-    if (createdBy) {
-      await activityLogsService.createLog({
-        userId: createdBy.userId,
-        action: 'create_user',
-        module: 'Users',
-        description: `Created new user: ${user.email} (${user.name || 'No name'}) with role: ${user.customRole?.name || user.role}`,
-        ipAddress: createdBy.ipAddress,
-        userAgent: createdBy.userAgent,
-        status: 'success',
-        metadata: {
-          createdUserId: user.id,
-          createdUserEmail: user.email,
-          createdUserRole: user.role,
-          customRoleId: user.customRoleId
+    if (createdBy && createdBy.userId) {
+      try {
+        // Verify the user exists before logging
+        const logUser = await prisma.user.findUnique({
+          where: { id: createdBy.userId },
+          select: { id: true }
+        });
+
+        if (logUser) {
+          await activityLogsService.createLog({
+            userId: createdBy.userId,
+            action: 'create_user',
+            module: 'Users',
+            description: `Created new user: ${user.email} (${user.name || 'No name'}) with role: ${user.customRole?.name || user.role}`,
+            ipAddress: createdBy.ipAddress,
+            userAgent: createdBy.userAgent,
+            status: 'success',
+            metadata: {
+              createdUserId: user.id,
+              createdUserEmail: user.email,
+              createdUserRole: user.role,
+              customRoleId: user.customRoleId
+            }
+          });
         }
-      });
+      } catch (logError) {
+        console.error('Failed to log activity:', logError);
+        // Don't fail user creation if logging fails
+      }
     }
 
     // Send credentials email if requested (default: true)
     if (data.sendEmail !== false) {
-      const emailResult = await emailService.sendCredentialsEmail({
-        userId: user.id,
-        email: user.email,
-        name: user.name || user.email,
-        temporaryPassword: temporaryPassword
-      });
-
-      // Log email sending activity
-      if (createdBy) {
-        await activityLogsService.createLog({
-          userId: createdBy.userId,
-          action: 'send_credentials_email',
-          module: 'Users',
-          description: `${emailResult.success ? 'Successfully sent' : 'Failed to send'} credentials email to: ${user.email}`,
-          ipAddress: createdBy.ipAddress,
-          userAgent: createdBy.userAgent,
-          status: emailResult.success ? 'success' : 'failed',
-          metadata: {
-            recipientUserId: user.id,
-            recipientEmail: user.email,
-            emailStatus: emailResult.success ? 'sent' : 'failed',
-            error: emailResult.error
-          }
+      try {
+        const emailResult = await emailService.sendCredentialsEmail({
+          userId: user.id,
+          email: user.email,
+          name: user.name || user.email,
+          temporaryPassword: temporaryPassword
         });
+
+        // Log email sending activity
+        if (createdBy && createdBy.userId) {
+          try {
+            await activityLogsService.createLog({
+              userId: createdBy.userId,
+              action: 'send_credentials_email',
+              module: 'Users',
+              description: `${emailResult.success ? 'Successfully sent' : 'Failed to send'} credentials email to: ${user.email}`,
+              ipAddress: createdBy.ipAddress,
+              userAgent: createdBy.userAgent,
+              status: emailResult.success ? 'success' : 'failed',
+              metadata: {
+                recipientUserId: user.id,
+                recipientEmail: user.email,
+                emailStatus: emailResult.success ? 'sent' : 'failed',
+                error: emailResult.error
+              }
+            });
+          } catch (logError) {
+            console.error('Failed to log email activity:', logError);
+          }
+        }
+      } catch (emailError: any) {
+        // Log email error but don't fail user creation
+        console.error('Failed to send credentials email:', emailError.message);
+        if (createdBy && createdBy.userId) {
+          try {
+            await activityLogsService.createLog({
+              userId: createdBy.userId,
+              action: 'send_credentials_email',
+              module: 'Users',
+              description: `Failed to send credentials email to: ${user.email}`,
+              ipAddress: createdBy.ipAddress,
+              userAgent: createdBy.userAgent,
+              status: 'failed',
+              metadata: {
+                recipientUserId: user.id,
+                recipientEmail: user.email,
+                emailStatus: 'failed',
+                error: emailError.message
+              }
+            });
+          } catch (logError) {
+            console.error('Failed to log email error:', logError);
+          }
+        }
       }
     }
 

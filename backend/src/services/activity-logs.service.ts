@@ -88,11 +88,29 @@ export class ActivityLogsService {
     status?: string;
     metadata?: any;
   }) {
+    // Only include userId if it exists and is valid
+    const logData: any = {
+      action: data.action,
+      module: data.module,
+      description: data.description,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+      status: data.status || 'success',
+      metadata: data.metadata ? JSON.stringify(data.metadata) : null
+    };
+
+    // Only add userId if provided
+    if (data.userId) {
+      logData.userId = data.userId;
+    }
+
+    // Only add tenantId if provided
+    if (data.tenantId) {
+      logData.tenantId = data.tenantId;
+    }
+
     return await prisma.activityLog.create({
-      data: {
-        ...data,
-        metadata: data.metadata ? JSON.stringify(data.metadata) : null
-      }
+      data: logData
     });
   }
 
