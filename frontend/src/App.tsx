@@ -9,6 +9,8 @@ import ActivityLogs from './pages/ActivityLogs';
 import Notifications from './pages/Notifications';
 import Backups from './pages/Backups';
 import Sessions from './pages/Sessions';
+import Analytics from './pages/Analytics';
+import DataCleaning from './pages/DataCleaning';
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/backups" element={<Backups />} />
           <Route path="/sessions" element={<Sessions />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/data-cleaning" element={<DataCleaning />} />
           <Route path="/roles" element={<RolesManagement />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/tenant/:id" element={<TenantDetails />} />

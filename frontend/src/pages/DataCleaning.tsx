@@ -1,292 +1,232 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { dataCleaningService } from '../services/data-cleaning.service';
-import { campaignsService } from '../services/campaigns.service';
+import Toast from '../components/Toast';
 
 export default function DataCleaning() {
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [selectedCampaign, setSelectedCampaign] = useState<string>('');
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
-  const [duplicates, setDuplicates] = useState<any[]>([]);
-  const [invalidEmails, setInvalidEmails] = useState<any[]>([]);
-  const [invalidPhones, setInvalidPhones] = useState<any[]>([]);
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'duplicates' | 'emails' | 'phones'>('duplicates');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const [cleaning, setCleaning] = useState<string | null>(null);
 
   useEffect(() => {
-    loadCampaigns();
+    fetchStats();
   }, []);
 
-  useEffect(() => {
-    if (selectedCampaign) {
-      loadData();
-    }
-  }, [selectedCampaign]);
-
-  const loadCampaigns = async () => {
+  const fetchStats = async () => {
     try {
-      const data = await campaignsService.getAllCampaigns();
-      setCampaigns(data);
-      if (data.length > 0) {
-        setSelectedCampaign(data[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to load campaigns:', error);
-    }
-  };
-
-  const loadData = async () => {
-    if (!selectedCampaign) return;
-    setLoading(true);
-    try {
-      const [statsData, dupsData, emailsData, phonesData] = await Promise.all([
-        dataCleaningService.getCleaningStats(selectedCampaign),
-        dataCleaningService.detectDuplicates(selectedCampaign),
-        dataCleaningService.validateEmails(selectedCampaign),
-        dataCleaningService.validatePhoneNumbers(selectedCampaign)
-      ]);
+      const statsData = await dataCleaningService.getStats();
       setStats(statsData);
-      setDuplicates(dupsData);
-      setInvalidEmails(emailsData);
-      setInvalidPhones(phonesData);
-    } catch (error) {
-      console.error('Failed to load data:', error);
+    } catch (err: any) {
+      if (err.message.includes('Unauthorized')) {
+        navigate('/login');
+      }
+      setToast({ message: err.message, type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMarkDuplicates = async () => {
-    if (!selectedCampaign) return;
-    setLoading(true);
+  const handleCleanup = async (type: string) => {
+    if (!confirm(`Are you sure you want to clean up ${type}? This action cannot be undone.`)) return;
+
     try {
-      await dataCleaningService.markDuplicates(selectedCampaign);
-      await loadData();
-      alert('Duplicates marked successfully');
-    } catch (error) {
-      console.error('Failed to mark duplicates:', error);
-      alert('Failed to mark duplicates');
+      setCleaning(type);
+      let result;
+      switch (type) {
+        case 'expired-sessions':
+          result = await dataCleaningService.cleanupExpiredSessions();
+          break;
+        case 'old-logs':
+          result = await dataCleaningService.cleanupOldLogs(90);
+          break;
+        case 'old-backups':
+          result = await dataCleaningService.cleanupOldBackups(30);
+          break;
+        case 'orphaned-data':
+          result = await dataCleaningService.cleanupOrphanedData();
+          break;
+        default:
+          throw new Error('Invalid cleanup type');
+      }
+      setToast({ message: `Successfully cleaned up ${result.count} items`, type: 'success' });
+      fetchStats();
+    } catch (err: any) {
+      setToast({ message: err.message, type: 'error' });
     } finally {
-      setLoading(false);
+      setCleaning(null);
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedItems.size === 0) return;
-    if (!confirm(`Delete ${selectedItems.size} participants?`)) return;
-    
-    setLoading(true);
-    try {
-      await dataCleaningService.bulkDelete(Array.from(selectedItems));
-      setSelectedItems(new Set());
-      await loadData();
-      alert('Participants deleted successfully');
-    } catch (error) {
-      console.error('Failed to delete:', error);
-      alert('Failed to delete participants');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        </div>
+      </Layout>
+    );
+  }
 
-  const toggleSelection = (id: string) => {
-    const newSet = new Set(selectedItems);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
+  const cleanupTasks = [
+    {
+      id: 'expired-sessions',
+      title: 'Expired Sessions',
+      description: 'Remove expired user sessions from the database',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      ),
+      count: stats?.expiredSessions || 0,
+      color: 'from-blue-500 to-blue-600'
+    },
+    {
+      id: 'old-logs',
+      title: 'Old Activity Logs',
+      description: 'Remove activity logs older than 90 days',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      count: stats?.oldLogs || 0,
+      color: 'from-green-500 to-green-600'
+    },
+    {
+      id: 'old-backups',
+      title: 'Old Backups',
+      description: 'Remove backups older than 30 days',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+        </svg>
+      ),
+      count: stats?.oldBackups || 0,
+      color: 'from-purple-500 to-purple-600'
+    },
+    {
+      id: 'orphaned-data',
+      title: 'Orphaned Data',
+      description: 'Remove data without valid references',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      ),
+      count: stats?.orphanedData || 0,
+      color: 'from-red-500 to-red-600'
     }
-    setSelectedItems(newSet);
-  };
+  ];
 
   return (
     <Layout>
-      <div className="p-6 space-y-6">
+      <div className="p-6 animate-fadeIn">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Data Cleaning Tools</h1>
-          <p className="text-gray-600 mt-1">Clean and validate participant data</p>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold gradient-text">Data Cleaning</h1>
+          <p className="text-gray-600 mt-1">Optimize database performance by removing unnecessary data</p>
         </div>
 
-        {/* Campaign Selector */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Campaign
-          </label>
-          <select
-            value={selectedCampaign}
-            onChange={(e) => setSelectedCampaign(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-          >
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+        {/* Warning Banner */}
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-lg">
+          <div className="flex items-start">
+            <svg className="w-6 h-6 text-yellow-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-medium text-yellow-800">Warning: Irreversible Action</h3>
+              <p className="text-sm text-yellow-700 mt-1">
+                Data cleanup operations cannot be undone. Please ensure you have recent backups before proceeding.
+              </p>
+            </div>
           </div>
-        ) : stats ? (
-          <>
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="text-sm text-gray-600">Total</div>
-                <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
-              </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="text-sm text-gray-600">Duplicates</div>
-                <div className="text-2xl font-bold text-orange-600">{stats.duplicates}</div>
-              </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="text-sm text-gray-600">Invalid Emails</div>
-                <div className="text-2xl font-bold text-red-600">{stats.invalidEmails}</div>
-              </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="text-sm text-gray-600">Invalid Phones</div>
-                <div className="text-2xl font-bold text-red-600">{stats.invalidPhones}</div>
-              </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <div className="text-sm text-gray-600">Clean</div>
-                <div className="text-2xl font-bold text-green-600">{stats.clean}</div>
-              </div>
-            </div>
+        </div>
 
-            {/* Actions */}
-            <div className="flex gap-4">
-              <button
-                onClick={handleMarkDuplicates}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
-              >
-                Mark Duplicates
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                disabled={selectedItems.size === 0}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                Delete Selected ({selectedItems.size})
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="border-b border-gray-200">
-                <div className="flex">
-                  <button
-                    onClick={() => setActiveTab('duplicates')}
-                    className={`px-6 py-3 font-medium ${
-                      activeTab === 'duplicates'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Duplicates ({duplicates.length})
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('emails')}
-                    className={`px-6 py-3 font-medium ${
-                      activeTab === 'emails'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Invalid Emails ({invalidEmails.length})
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('phones')}
-                    className={`px-6 py-3 font-medium ${
-                      activeTab === 'phones'
-                        ? 'border-b-2 border-indigo-600 text-indigo-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Invalid Phones ({invalidPhones.length})
-                  </button>
+        {/* Cleanup Tasks Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {cleanupTasks.map((task) => (
+            <div
+              key={task.id}
+              className="bg-white rounded-xl shadow-lg overflow-hidden interactive-card"
+            >
+              <div className={`bg-gradient-to-r ${task.color} p-6 text-white`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="bg-white bg-opacity-20 p-3 rounded-lg">
+                    {task.icon}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm opacity-90">Items to Clean</p>
+                    <p className="text-4xl font-bold">{task.count}</p>
+                  </div>
                 </div>
+                <h3 className="text-xl font-bold">{task.title}</h3>
               </div>
 
               <div className="p-6">
-                {activeTab === 'duplicates' && (
-                  <div className="space-y-4">
-                    {duplicates.map((group, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                        <div className="font-medium text-gray-900 mb-2">
-                          Duplicate Group {idx + 1} ({group.count} entries)
-                        </div>
-                        <div className="space-y-2">
-                          {group.participants.map((p: any) => (
-                            <div key={p.id} className="flex items-center gap-3 text-sm">
-                              <input
-                                type="checkbox"
-                                checked={selectedItems.has(p.id)}
-                                onChange={() => toggleSelection(p.id)}
-                                className="rounded"
-                              />
-                              <span>{p.name}</span>
-                              <span className="text-gray-500">{p.email || p.phone}</span>
-                              {p.isDuplicate && (
-                                <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs">
-                                  Marked
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'emails' && (
-                  <div className="space-y-2">
-                    {invalidEmails.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={() => toggleSelection(item.id)}
-                          className="rounded"
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-red-600">{item.email}</div>
-                        </div>
-                        <span className="text-xs text-gray-500">{item.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {activeTab === 'phones' && (
-                  <div className="space-y-2">
-                    {invalidPhones.map((item) => (
-                      <div key={item.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.has(item.id)}
-                          onChange={() => toggleSelection(item.id)}
-                          className="rounded"
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-sm text-red-600">{item.phone}</div>
-                        </div>
-                        <span className="text-xs text-gray-500">{item.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <p className="text-gray-600 mb-4">{task.description}</p>
+                <button
+                  onClick={() => handleCleanup(task.id)}
+                  disabled={cleaning === task.id || task.count === 0}
+                  className="w-full flex items-center justify-center space-x-2 bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-lg hover:scale-105 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 btn-ripple"
+                >
+                  {cleaning === task.id ? (
+                    <>
+                      <svg className="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>Cleaning...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span>{task.count === 0 ? 'No Items to Clean' : 'Clean Up Now'}</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          </>
-        ) : null}
+          ))}
+        </div>
+
+        {/* Database Stats */}
+        <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Database Statistics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="text-center">
+              <div className="text-3xl font-bold gradient-text mb-2">
+                {((stats?.totalSize || 0) / 1024 / 1024).toFixed(2)} MB
+              </div>
+              <p className="text-sm text-gray-600">Total Database Size</p>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold gradient-text mb-2">
+                {stats?.totalRecords || 0}
+              </div>
+              <p className="text-sm text-gray-600">Total Records</p>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl font-bold gradient-text mb-2">
+                {stats?.cleanableRecords || 0}
+              </div>
+              <p className="text-sm text-gray-600">Cleanable Records</p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </Layout>
   );
 }

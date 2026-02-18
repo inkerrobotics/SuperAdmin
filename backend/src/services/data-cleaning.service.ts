@@ -3,156 +3,148 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export class DataCleaningService {
-  async detectDuplicates(campaignId: string) {
-    const participants = await prisma.participant.findMany({
-      where: { campaignId },
-      orderBy: { createdAt: 'asc' }
-    });
+  /**
+   * Get statistics for cleanable data
+   */
+  async getStats() {
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const duplicates: any[] = [];
-    const seen = new Map<string, any[]>();
-
-    participants.forEach(p => {
-      const key = `${p.email?.toLowerCase() || ''}-${p.phone || ''}`;
-      if (!seen.has(key)) {
-        seen.set(key, []);
-      }
-      seen.get(key)!.push(p);
-    });
-
-    seen.forEach((group, key) => {
-      if (group.length > 1 && key !== '-') {
-        duplicates.push({
-          key,
-          count: group.length,
-          participants: group
-        });
-      }
-    });
-
-    return duplicates;
-  }
-
-  async markDuplicates(campaignId: string) {
-    const duplicates = await this.detectDuplicates(campaignId);
-    let markedCount = 0;
-
-    for (const group of duplicates) {
-      const [first, ...rest] = group.participants;
-      for (const dup of rest) {
-        await prisma.participant.update({
-          where: { id: dup.id },
-          data: { isDuplicate: true }
-        });
-        markedCount++;
-      }
-    }
-
-    return { markedCount, totalGroups: duplicates.length };
-  }
-
-  async mergeParticipants(keepId: string, removeIds: string[]) {
-    const keep = await prisma.participant.findUnique({ where: { id: keepId } });
-    if (!keep) throw new Error('Primary participant not found');
-
-    await prisma.participant.deleteMany({
-      where: { id: { in: removeIds } }
-    });
-
-    await prisma.campaign.update({
-      where: { id: keep.campaignId },
-      data: {
-        totalParticipants: {
-          decrement: removeIds.length
+    const [expiredSessions, oldLogs, oldBackups, totalRecords] = await Promise.all([
+      // Expired sessions
+      prisma.session.count({
+        where: {
+          OR: [
+            { isActive: false },
+            { expiresAt: { lt: now } }
+          ]
         }
-      }
-    });
-
-    return { merged: removeIds.length };
-  }
-
-  async validatePhoneNumbers(campaignId: string) {
-    const participants = await prisma.participant.findMany({
-      where: { campaignId }
-    });
-
-    const phoneRegex = /^[\d\s\-\+\(\)]{10,}$/;
-    const invalid: any[] = [];
-
-    participants.forEach(p => {
-      if (p.phone && !phoneRegex.test(p.phone)) {
-        invalid.push({
-          id: p.id,
-          name: p.name,
-          phone: p.phone,
-          reason: 'Invalid format'
-        });
-      }
-    });
-
-    return invalid;
-  }
-
-  async validateEmails(campaignId: string) {
-    const participants = await prisma.participant.findMany({
-      where: { campaignId }
-    });
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const invalid: any[] = [];
-
-    participants.forEach(p => {
-      if (p.email && !emailRegex.test(p.email)) {
-        invalid.push({
-          id: p.id,
-          name: p.name,
-          email: p.email,
-          reason: 'Invalid format'
-        });
-      }
-    });
-
-    return invalid;
-  }
-
-  async bulkDelete(participantIds: string[]) {
-    const participants = await prisma.participant.findMany({
-      where: { id: { in: participantIds } }
-    });
-
-    const campaignUpdates = new Map<string, number>();
-    participants.forEach(p => {
-      campaignUpdates.set(p.campaignId, (campaignUpdates.get(p.campaignId) || 0) + 1);
-    });
-
-    await prisma.participant.deleteMany({
-      where: { id: { in: participantIds } }
-    });
-
-    for (const [campaignId, count] of campaignUpdates) {
-      await prisma.campaign.update({
-        where: { id: campaignId },
-        data: { totalParticipants: { decrement: count } }
-      });
-    }
-
-    return { deleted: participantIds.length };
-  }
-
-  async getCleaningStats(campaignId: string) {
-    const [total, duplicates, invalidEmails, invalidPhones] = await Promise.all([
-      prisma.participant.count({ where: { campaignId } }),
-      prisma.participant.count({ where: { campaignId, isDuplicate: true } }),
-      this.validateEmails(campaignId),
-      this.validatePhoneNumbers(campaignId)
+      }),
+      // Old activity logs (older than 90 days)
+      prisma.activityLog.count({
+        where: {
+          createdAt: { lt: ninetyDaysAgo }
+        }
+      }),
+      // Old backups (older than 30 days)
+      prisma.backup.count({
+        where: {
+          createdAt: { lt: thirtyDaysAgo },
+          status: 'completed'
+        }
+      }),
+      // Total records count
+      Promise.all([
+        prisma.session.count(),
+        prisma.activityLog.count(),
+        prisma.backup.count(),
+        prisma.notification.count()
+      ]).then(counts => counts.reduce((a, b) => a + b, 0))
     ]);
 
+    const cleanableRecords = expiredSessions + oldLogs + oldBackups;
+
     return {
-      total,
-      duplicates,
-      invalidEmails: invalidEmails.length,
-      invalidPhones: invalidPhones.length,
-      clean: total - duplicates - invalidEmails.length - invalidPhones.length
+      expiredSessions,
+      oldLogs,
+      oldBackups,
+      orphanedData: 0, // Placeholder for now
+      totalRecords,
+      cleanableRecords,
+      totalSize: 0 // Placeholder - would need database-specific queries
+    };
+  }
+
+  /**
+   * Cleanup expired sessions
+   */
+  async cleanupExpiredSessions() {
+    const now = new Date();
+    
+    const result = await prisma.session.deleteMany({
+      where: {
+        OR: [
+          { isActive: false },
+          { expiresAt: { lt: now } }
+        ]
+      }
+    });
+
+    return {
+      count: result.count,
+      message: `Cleaned up ${result.count} expired session(s)`
+    };
+  }
+
+  /**
+   * Cleanup old activity logs
+   */
+  async cleanupOldLogs(days: number = 90) {
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    
+    const result = await prisma.activityLog.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate }
+      }
+    });
+
+    return {
+      count: result.count,
+      message: `Cleaned up ${result.count} old activity log(s)`
+    };
+  }
+
+  /**
+   * Cleanup old backups
+   */
+  async cleanupOldBackups(days: number = 30) {
+    const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    
+    const result = await prisma.backup.deleteMany({
+      where: {
+        createdAt: { lt: cutoffDate },
+        status: 'completed'
+      }
+    });
+
+    return {
+      count: result.count,
+      message: `Cleaned up ${result.count} old backup(s)`
+    };
+  }
+
+  /**
+   * Cleanup orphaned data
+   */
+  async cleanupOrphanedData() {
+    let totalCleaned = 0;
+
+    // Clean up notifications without valid users
+    const orphanedNotifications = await prisma.notification.deleteMany({
+      where: {
+        userId: {
+          not: null
+        },
+        user: null
+      }
+    });
+    totalCleaned += orphanedNotifications.count;
+
+    // Clean up email logs without valid users
+    const orphanedEmailLogs = await prisma.emailLog.deleteMany({
+      where: {
+        userId: {
+          not: null
+        },
+        user: null
+      }
+    });
+    totalCleaned += orphanedEmailLogs.count;
+
+    return {
+      count: totalCleaned,
+      message: `Cleaned up ${totalCleaned} orphaned record(s)`
     };
   }
 }

@@ -1,15 +1,26 @@
 import { Router } from 'express';
-import { verifyToken } from '../middleware/auth.middleware';
-import * as dataCleaningController from '../controllers/data-cleaning.controller';
+import {
+  getStats,
+  cleanupExpiredSessions,
+  cleanupOldLogs,
+  cleanupOldBackups,
+  cleanupOrphanedData
+} from '../controllers/data-cleaning.controller';
+import { verifyToken, requireSuperAdmin } from '../middleware/auth.middleware';
 
 const router = Router();
 
-router.get('/duplicates/:campaignId', verifyToken, dataCleaningController.detectDuplicates);
-router.post('/mark-duplicates/:campaignId', verifyToken, dataCleaningController.markDuplicates);
-router.post('/merge', verifyToken, dataCleaningController.mergeParticipants);
-router.get('/validate-phones/:campaignId', verifyToken, dataCleaningController.validatePhoneNumbers);
-router.get('/validate-emails/:campaignId', verifyToken, dataCleaningController.validateEmails);
-router.post('/bulk-delete', verifyToken, dataCleaningController.bulkDelete);
-router.get('/stats/:campaignId', verifyToken, dataCleaningController.getCleaningStats);
+// All routes require authentication and super admin access
+router.use(verifyToken);
+router.use(requireSuperAdmin);
+
+// Get cleanup statistics
+router.get('/stats', getStats);
+
+// Cleanup endpoints
+router.post('/expired-sessions', cleanupExpiredSessions);
+router.post('/old-logs', cleanupOldLogs);
+router.post('/old-backups', cleanupOldBackups);
+router.post('/orphaned-data', cleanupOrphanedData);
 
 export default router;
