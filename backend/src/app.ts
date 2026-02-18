@@ -14,6 +14,7 @@ import backupsRoutes from './routes/backups.routes';
 import sessionRoutes from './routes/session.routes';
 import dataCleaningRoutes from './routes/data-cleaning.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import tenantsRoutes from './routes/tenants.routes';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use('/api/backups', backupsRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/data-cleaning', dataCleaningRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/tenants', tenantsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

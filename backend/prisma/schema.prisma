@@ -37,17 +37,18 @@ model User {
 }
 
 model Tenant {
-  id               String         @id @default(uuid())
+  id               String              @id @default(uuid())
   name             String
-  email            String         @unique
-  status           TenantStatus   @default(PENDING)
+  email            String              @unique
+  status           TenantStatus        @default(PENDING)
   subscriptionPlan String?
   users            User[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   ActivityLog      ActivityLog[]
   TenantProfile    TenantProfile?
   Campaign         Campaign[]
+  statusHistory    TenantStatusHistory[]
 }
 
 model CustomRole {
@@ -331,4 +332,20 @@ model Session {
   @@index([token])
   @@index([isActive])
   @@index([expiresAt])
+}
+
+model TenantStatusHistory {
+  id          String       @id @default(uuid())
+  tenantId    String
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  oldStatus   TenantStatus
+  newStatus   TenantStatus
+  reason      String
+  changedBy   String
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
 }

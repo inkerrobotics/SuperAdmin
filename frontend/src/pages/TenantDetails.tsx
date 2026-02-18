@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { dashboardService, Tenant } from '../services/dashboard.service';
+import { tenantsService, TenantStatusHistory } from '../services/tenants.service';
 import Layout from '../components/Layout';
 
 export default function TenantDetails() {
   const { id } = useParams<{ id: string }>();
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [tenant, setTenant] = useState<any | null>(null);
+  const [statusHistory, setStatusHistory] = useState<TenantStatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -18,8 +19,12 @@ export default function TenantDetails() {
   const loadTenantDetails = async () => {
     try {
       setLoading(true);
-      const data = await dashboardService.getTenantDetails(id!);
-      setTenant(data);
+      const [tenantData, historyData] = await Promise.all([
+        tenantsService.getTenantById(id!),
+        tenantsService.getTenantStatusHistory(id!)
+      ]);
+      setTenant(tenantData);
+      setStatusHistory(historyData);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -167,6 +172,78 @@ export default function TenantDetails() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Status History */}
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-purple-50">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <svg className="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Status Change History (Audit Trail)
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">Complete history of all status changes with reasons</p>
+            </div>
+            <div className="overflow-x-auto">
+              {statusHistory.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="font-medium">No status changes recorded</p>
+                  <p className="text-sm mt-1">Status changes will appear here</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {statusHistory.map((history, index) => (
+                    <div key={history.id} className="p-6 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start space-x-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                            {index + 1}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(history.oldStatus)}`}>
+                              {history.oldStatus}
+                            </span>
+                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(history.newStatus)}`}>
+                              {history.newStatus}
+                            </span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                            <p className="text-sm text-gray-700">
+                              <span className="font-medium">Reason:</span> {history.reason}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                            <div className="flex items-center">
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              {formatDate(history.createdAt)}
+                            </div>
+                            {history.ipAddress && (
+                              <div className="flex items-center">
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                                </svg>
+                                IP: {history.ipAddress}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
       </div>
