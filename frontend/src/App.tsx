@@ -12,6 +12,7 @@ import Sessions from './pages/Sessions';
 import Analytics from './pages/Analytics';
 import DataCleaning from './pages/DataCleaning';
 import TenantsManagement from './pages/TenantsManagement';
+import CreateTenant from './pages/CreateTenant';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/data-cleaning" element={<DataCleaning />} />
           <Route path="/tenants" element={<TenantsManagement />} />
+          <Route path="/tenants/create" element={<CreateTenant />} />
           <Route path="/roles" element={<RolesManagement />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/tenant/:id" element={<TenantDetails />} />

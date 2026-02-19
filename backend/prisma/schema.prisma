@@ -35,16 +35,80 @@ model User {
 }
 
 model Tenant {
-  id               String                @id @default(uuid())
-  name             String
-  email            String                @unique
-  status           TenantStatus          @default(PENDING)
-  subscriptionPlan String?
-  users            User[]
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  activityLogs     ActivityLog[]
-  statusHistory    TenantStatusHistory[]
+  id                      String                @id @default(uuid())
+  tenantId                String                @unique // Custom tenant ID for identification
+  name                    String
+  email                   String                @unique
+  password                String                // Hashed password for tenant login
+  status                  TenantStatus          @default(PENDING)
+  subscriptionPlan        String?
+  
+  // Core Organization Details
+  organizationLogo        String?               // URL to logo file
+  businessCategory        String?               // Industry type
+  
+  // Authorized Tenant Admin Details
+  adminFullName           String?
+  adminMobileNumber       String?
+  adminDesignation        String?
+  
+  // Branding & Display Preferences
+  displayName             String?               // For posters
+  brandColor              String?               // Hex color code
+  
+  // Operational & Configuration Details
+  timezone                String?               @default("UTC")
+  country                 String?
+  region                  String?
+  drawFrequency           String?               // weekly, monthly, campaign-based
+  
+  // Compliance & Verification
+  businessVerificationStatus String?            @default("pending") // pending, verified, rejected
+  dataUsageConsent        Boolean               @default(false)
+  dataPrivacyAcknowledged Boolean               @default(false)
+  verifiedAt              DateTime?
+  verifiedBy              String?
+  
+  // Communication & Support Contacts
+  primaryContactPerson    String?
+  supportContactEmail     String?
+  escalationContact       String?
+  
+  // WhatsApp Integration Credentials (Encrypted)
+  whatsappPhoneNumberId   String?               // Encrypted
+  whatsappAccessToken     String?               // Encrypted
+  whatsappBusinessId      String?               // Encrypted
+  whatsappWebhookSecret   String?               // Encrypted
+  whatsappVerifyToken     String?               // Encrypted
+  
+  users                   User[]
+  permissions             TenantPermission[]
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  activityLogs            ActivityLog[]
+  statusHistory           TenantStatusHistory[]
+  lastLoginAt             DateTime?
+  
+  @@index([tenantId])
+  @@index([email])
+  @@index([status])
+  @@index([businessVerificationStatus])
+}
+
+model TenantPermission {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module    String   // e.g., "Campaigns", "Participants", "Winners", etc.
+  canView   Boolean  @default(true)
+  canCreate Boolean  @default(true)
+  canEdit   Boolean  @default(true)
+  canDelete Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, module])
+  @@index([tenantId])
 }
 
 model CustomRole {
