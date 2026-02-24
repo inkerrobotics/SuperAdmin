@@ -23,7 +23,7 @@ router.get('/stats', getTenantStats);
 router.get('/', getAllTenants);
 
 // Create new tenant (Super Admin only)
-router.post('/create', requireSuperAdmin, createTenant);
+router.post('/', requireSuperAdmin, createTenant);
 
 // Get tenant by ID
 router.get('/:id', getTenantById);

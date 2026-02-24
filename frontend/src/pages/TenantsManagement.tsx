@@ -178,8 +178,21 @@ export default function TenantsManagement() {
       <div className="p-6 animate-fadeIn">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold gradient-text">Tenant Management</h1>
-          <p className="text-gray-600 mt-1">Control tenant activation and manage client access</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold gradient-text">Tenant Management</h1>
+              <p className="text-gray-600 mt-1">Control tenant activation and manage client access</p>
+            </div>
+            <button
+              onClick={() => navigate('/tenants/create')}
+              className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:scale-105 transition-transform shadow-lg btn-ripple font-medium flex items-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create New Client
+            </button>
+          </div>
         </div>
 
         {/* Stats Cards */}

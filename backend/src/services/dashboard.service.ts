@@ -19,7 +19,7 @@ export class DashboardService {
       prisma.tenant.count({ where: { status: TenantStatus.INACTIVE } }),
       prisma.tenant.count({ where: { status: TenantStatus.PENDING } }),
       prisma.tenant.count({ where: { status: TenantStatus.SUSPENDED } }),
-      prisma.user.count({ where: { role: Role.TENANT_ADMIN } }),
+      prisma.user.count({ where: { role: Role.ADMIN } }),
       prisma.user.count(),
       prisma.user.count({ where: { role: Role.USER } })
     ]);

@@ -26,7 +26,8 @@ async function createSuperAdmin() {
       data: {
         email,
         password: hashedPassword,
-        role: Role.SUPER_ADMIN
+        role: Role.ADMIN,
+        name: 'Super Admin'
       }
     });
 

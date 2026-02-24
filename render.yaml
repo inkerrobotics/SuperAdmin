@@ -1,0 +1,53 @@
+services:
+  # Backend Service
+  - type: web
+    name: super-admin-backend
+    env: node
+    region: singapore
+    plan: starter
+    buildCommand: cd backend && npm install && npx prisma generate && npm run build
+    startCommand: cd backend && npx prisma migrate deploy && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: super-admin-db
+          property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: super-admin-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://super-admin-frontend.onrender.com
+    healthCheckPath: /api/health
+
+  # Frontend Service
+  - type: web
+    name: super-admin-frontend
+    env: static
+    region: singapore
+    plan: starter
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        value: https://super-admin-backend.onrender.com
+
+# Database
+databases:
+  - name: super-admin-db
+    databaseName: super_admin
+    user: super_admin_user
+    plan: starter
+    region: singapore

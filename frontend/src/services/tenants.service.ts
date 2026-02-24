@@ -136,6 +136,24 @@ class TenantsService {
 
     return response.json();
   }
+
+  async createTenant(tenantData: any) {
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify(tenantData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create tenant');
+    }
+
+    return response.json();
+  }
 }
 
 export const tenantsService = new TenantsService();

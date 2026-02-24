@@ -28,13 +28,13 @@ export class AuthService {
       throw error;
     }
 
-    if (user.role !== Role.SUPER_ADMIN) {
+    if (user.role !== Role.ADMIN) {
       // Log unauthorized access attempt
       await activityLogsService.createLog({
         userId: user.id,
         action: 'login',
         module: 'Auth',
-        description: `Unauthorized login attempt: ${email} (Not a Super Admin)`,
+        description: `Unauthorized login attempt: ${email} (Not an Admin)`,
         ipAddress: metadata?.ipAddress,
         userAgent: metadata?.userAgent,
         status: 'failed'
@@ -207,9 +207,7 @@ export class AuthService {
         name: user.name,
         email: user.email,
         role: user.role,
-        customRole: user.customRole,
-        isFirstLogin: user.isFirstLogin,
-        mustChangePassword: user.mustChangePassword
+        customRole: user.customRole
       }
     };
   }

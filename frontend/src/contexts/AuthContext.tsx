@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const isSuperAdmin = () => {
-    return user?.role === 'SUPER_ADMIN';
+    return user?.role === 'ADMIN';
   };
 
   const hasPermission = (module: string, action: 'view' | 'create' | 'edit' | 'delete' = 'view') => {

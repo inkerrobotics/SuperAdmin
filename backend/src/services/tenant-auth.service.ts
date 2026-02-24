@@ -25,11 +25,10 @@ export class TenantAuthService {
     });
 
     if (!tenant) {
-      // Log failed login attempt
       await activityLogsService.createLog({
         action: 'tenant_login',
         module: 'TenantAuth',
-        description: `Failed tenant login attempt for email: ${email} - Tenant not found`,
+        description: `Failed tenant login attempt for email: ${email} - Not found`,
         ipAddress,
         userAgent,
         status: 'failed'
@@ -79,7 +78,9 @@ export class TenantAuthService {
     // Update last login
     await prisma.tenant.update({
       where: { id: tenant.id },
-      data: { lastLoginAt: new Date() }
+      data: {
+        lastLoginAt: new Date()
+      }
     });
 
     // Generate JWT token
@@ -113,7 +114,9 @@ export class TenantAuthService {
         name: tenant.name,
         email: tenant.email,
         status: tenant.status,
-        subscriptionPlan: tenant.subscriptionPlan
+        subscriptionPlan: tenant.subscriptionPlan,
+        displayName: tenant.displayName,
+        logo: tenant.organizationLogo
       }
     };
   }
@@ -124,21 +127,8 @@ export class TenantAuthService {
   async getTenantProfile(tenantId: string) {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: {
-        id: true,
-        tenantId: true,
-        name: true,
-        email: true,
-        status: true,
-        subscriptionPlan: true,
-        whatsappPhoneNumberId: true,
-        whatsappAccessToken: true,
-        whatsappBusinessId: true,
-        whatsappWebhookSecret: true,
-        whatsappVerifyToken: true,
-        createdAt: true,
-        updatedAt: true,
-        lastLoginAt: true
+      include: {
+        permissions: true
       }
     });
 
@@ -149,7 +139,7 @@ export class TenantAuthService {
     }
 
     // Decrypt WhatsApp credentials
-    return {
+    const decryptedTenant = {
       ...tenant,
       whatsappPhoneNumberId: tenant.whatsappPhoneNumberId 
         ? CryptoUtil.decrypt(tenant.whatsappPhoneNumberId) 
@@ -167,6 +157,8 @@ export class TenantAuthService {
         ? CryptoUtil.decrypt(tenant.whatsappVerifyToken) 
         : null
     };
+
+    return decryptedTenant;
   }
 
   /**
@@ -200,13 +192,13 @@ export class TenantAuthService {
       updateData.whatsappVerifyToken = CryptoUtil.encrypt(credentials.verifyToken);
     }
 
-    const tenant = await prisma.tenant.update({
+    await prisma.tenant.update({
       where: { id: tenantId },
       data: updateData
     });
 
     await activityLogsService.createLog({
-      tenantId: tenant.id,
+      tenantId,
       action: 'update_whatsapp_credentials',
       module: 'TenantAuth',
       description: `Updated WhatsApp integration credentials`,
@@ -214,5 +206,54 @@ export class TenantAuthService {
     });
 
     return { message: 'WhatsApp credentials updated successfully' };
+  }
+
+  /**
+   * Change tenant password
+   */
+  async changePassword(
+    tenantId: string,
+    oldPassword: string,
+    newPassword: string
+  ) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+
+    if (!tenant) {
+      const error: any = new Error('Tenant not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // Verify old password
+    const isPasswordValid = await bcrypt.compare(oldPassword, tenant.password);
+
+    if (!isPasswordValid) {
+      const error: any = new Error('Current password is incorrect');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        password: hashedPassword
+      }
+    });
+
+    await activityLogsService.createLog({
+      tenantId,
+      action: 'change_password',
+      module: 'TenantAuth',
+      description: `Tenant changed password`,
+      status: 'success'
+    });
+
+    return { message: 'Password changed successfully' };
   }
 }

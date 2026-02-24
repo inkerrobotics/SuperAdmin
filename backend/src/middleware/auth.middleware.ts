@@ -33,8 +33,8 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
 };
 
 export const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (req.user?.role !== Role.SUPER_ADMIN) {
-    return res.status(403).json({ message: 'Super Admin access required' });
+  if (req.user?.role !== Role.ADMIN) {
+    return res.status(403).json({ message: 'Admin access required' });
   }
   next();
 };

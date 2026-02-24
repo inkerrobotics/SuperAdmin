@@ -2,18 +2,50 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import Toast from '../components/Toast';
+import { tenantsService } from '../services/tenants.service';
 
 export default function CreateTenant() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
-  
-  const [formData, setFormData] = useState({
+
+  const [clientData, setClientData] = useState({
+    // Basic Information
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     subscriptionPlan: 'Basic',
+    
+    // Core Organization Details
+    organizationLogo: '',
+    businessCategory: '',
+    
+    // Authorized Tenant Admin Details
+    adminFullName: '',
+    adminMobileNumber: '',
+    adminDesignation: '',
+    
+    // Branding & Display Preferences
+    displayName: '',
+    brandColor: '#6366f1',
+    
+    // Operational & Configuration Details
+    timezone: 'Asia/Kolkata',
+    country: 'India',
+    region: '',
+    drawFrequency: 'monthly',
+    
+    // Compliance & Verification
+    dataUsageConsent: false,
+    dataPrivacyAcknowledged: false,
+    
+    // Communication & Support Contacts
+    primaryContactPerson: '',
+    supportContactEmail: '',
+    escalationContact: '',
+    
     // WhatsApp Integration
     whatsappPhoneNumberId: '',
     whatsappAccessToken: '',
@@ -22,24 +54,60 @@ export default function CreateTenant() {
     whatsappVerifyToken: ''
   });
 
-  const [showWhatsAppSection, setShowWhatsAppSection] = useState(false);
+  // Lucky Draw Permissions
+  const luckyDrawModules = [
+    'Campaigns',
+    'Participants',
+    'Winners',
+    'Draw Management',
+    'Reports & Analytics',
+    'Settings'
+  ];
+
+  const [permissions, setPermissions] = useState<Record<string, {
+    canView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+  }>>(() => {
+    const initial: any = {};
+    luckyDrawModules.forEach(module => {
+      initial[module] = { canView: true, canCreate: true, canEdit: true, canDelete: true };
+    });
+    return initial;
+  });
+
+  const handlePermissionToggle = (module: string, permission: 'canView' | 'canCreate' | 'canEdit' | 'canDelete') => {
+    setPermissions(prev => ({
+      ...prev,
+      [module]: {
+        ...prev[module],
+        [permission]: !prev[module][permission]
+      }
+    }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!clientData.name || !clientData.email || !clientData.password) {
       setToast({ message: 'Please fill in all required fields', type: 'warning' });
       return;
     }
 
-    if (formData.password !== formData.confirmPassword) {
+    if (clientData.password !== clientData.confirmPassword) {
       setToast({ message: 'Passwords do not match', type: 'error' });
       return;
     }
 
-    if (formData.password.length < 8) {
+    if (clientData.password.length < 8) {
       setToast({ message: 'Password must be at least 8 characters', type: 'error' });
+      return;
+    }
+
+    if (!clientData.dataUsageConsent || !clientData.dataPrivacyAcknowledged) {
+      setToast({ message: 'Please accept data usage consent and privacy acknowledgment', type: 'warning' });
       return;
     }
 
@@ -47,37 +115,15 @@ export default function CreateTenant() {
       setLoading(true);
 
       const payload: any = {
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        subscriptionPlan: formData.subscriptionPlan
+        ...clientData,
+        permissions: Object.entries(permissions).map(([module, perms]) => ({
+          module,
+          ...perms
+        }))
       };
 
-      // Add WhatsApp credentials if provided
-      if (showWhatsAppSection) {
-        if (formData.whatsappPhoneNumberId) payload.whatsappPhoneNumberId = formData.whatsappPhoneNumberId;
-        if (formData.whatsappAccessToken) payload.whatsappAccessToken = formData.whatsappAccessToken;
-        if (formData.whatsappBusinessId) payload.whatsappBusinessId = formData.whatsappBusinessId;
-        if (formData.whatsappWebhookSecret) payload.whatsappWebhookSecret = formData.whatsappWebhookSecret;
-        if (formData.whatsappVerifyToken) payload.whatsappVerifyToken = formData.whatsappVerifyToken;
-      }
-
-      const response = await fetch('http://localhost:5001/api/tenants/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create tenant');
-      }
-
-      const result = await response.json();
-      setToast({ message: `Tenant created successfully! Tenant ID: ${result.tenantId}`, type: 'success' });
+      const result = await tenantsService.createTenant(payload);
+      setToast({ message: `Client created successfully! Client ID: ${result.tenantId}`, type: 'success' });
       
       setTimeout(() => {
         navigate('/tenants');
@@ -89,220 +135,627 @@ export default function CreateTenant() {
     }
   };
 
+  const tabs = [
+    { id: 'basic', name: 'Basic Information', icon: '📋' },
+    { id: 'organization', name: 'Organization Details', icon: '🏢' },
+    { id: 'admin', name: 'Admin Contact', icon: '👤' },
+    { id: 'branding', name: 'Branding', icon: '🎨' },
+    { id: 'operational', name: 'Operational', icon: '⚙️' },
+    { id: 'permissions', name: 'Permissions', icon: '🔐' },
+    { id: 'whatsapp', name: 'WhatsApp', icon: '💬' },
+    { id: 'compliance', name: 'Compliance', icon: '✅' },
+    { id: 'support', name: 'Support Contacts', icon: '📞' }
+  ];
+
   return (
     <Layout>
-      <div className="p-6 max-w-4xl mx-auto animate-fadeIn">
+      <div className="p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold gradient-text">Create New Tenant</h1>
-          <p className="text-gray-600 mt-1">Create a new organization with login credentials and WhatsApp integration</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold gradient-text">Create New Client</h1>
+              <p className="text-gray-600 mt-1">Add a new organization to the Lucky Draw System</p>
+            </div>
+            <button
+              onClick={() => navigate('/tenants')}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 flex items-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Clients
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6 space-y-6">
-          {/* Basic Information */}
-          <div className="border-b pb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-              <svg className="w-6 h-6 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-              </svg>
-              Organization Details
-            </h2>
+        <form onSubmit={handleSubmit}>
+          {/* Tabs */}
+          <div className="bg-white rounded-xl shadow-lg mb-6">
+            <div className="border-b border-gray-200 overflow-x-auto">
+              <nav className="flex space-x-2 p-4" aria-label="Tabs">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`
+                      px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition-colors
+                      ${activeTab === tab.id
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                      }
+                    `}
+                  >
+                    <span className="mr-2">{tab.icon}</span>
+                    {tab.name}
+                  </button>
+                ))}
+              </nav>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Organization Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Acme Corporation"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                />
-              </div>
+            {/* Tab Content */}
+            <div className="p-6">
+              {/* Basic Information Tab */}
+              {activeTab === 'basic' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Organization Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.name}
+                        onChange={(e) => setClientData({ ...clientData, name: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Acme Corporation"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="admin@acme.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                />
-              </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Email Address <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={clientData.email}
+                        onChange={(e) => setClientData({ ...clientData, email: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="admin@acme.com"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Min. 8 characters"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                  minLength={8}
-                />
-              </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Password <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={clientData.password}
+                        onChange={(e) => setClientData({ ...clientData, password: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Min. 8 characters"
+                        required
+                        minLength={8}
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Confirm Password <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  placeholder="Re-enter password"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                />
-              </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Confirm Password <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={clientData.confirmPassword}
+                        onChange={(e) => setClientData({ ...clientData, confirmPassword: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Re-enter password"
+                        required
+                      />
+                    </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Subscription Plan
-                </label>
-                <select
-                  value={formData.subscriptionPlan}
-                  onChange={(e) => setFormData({ ...formData, subscriptionPlan: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="Basic">Basic</option>
-                  <option value="Professional">Professional</option>
-                  <option value="Enterprise">Enterprise</option>
-                </select>
-              </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Subscription Plan
+                      </label>
+                      <select
+                        value={clientData.subscriptionPlan}
+                        onChange={(e) => setClientData({ ...clientData, subscriptionPlan: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="Basic">Basic</option>
+                        <option value="Professional">Professional</option>
+                        <option value="Enterprise">Enterprise</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Organization Details Tab */}
+              {activeTab === 'organization' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Organization Details</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Organization Logo URL
+                      </label>
+                      <input
+                        type="url"
+                        value={clientData.organizationLogo}
+                        onChange={(e) => setClientData({ ...clientData, organizationLogo: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="https://example.com/logo.png"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">High resolution logo for posters and branding</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Business Category / Industry Type
+                      </label>
+                      <select
+                        value={clientData.businessCategory}
+                        onChange={(e) => setClientData({ ...clientData, businessCategory: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="">Select Category</option>
+                        <option value="Retail">Retail</option>
+                        <option value="E-commerce">E-commerce</option>
+                        <option value="Food & Beverage">Food & Beverage</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Education">Education</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Real Estate">Real Estate</option>
+                        <option value="Automotive">Automotive</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Admin Contact Tab */}
+              {activeTab === 'admin' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Authorized Tenant Admin Details</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.adminFullName}
+                        onChange={(e) => setClientData({ ...clientData, adminFullName: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="John Doe"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mobile Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={clientData.adminMobileNumber}
+                        onChange={(e) => setClientData({ ...clientData, adminMobileNumber: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="+91 98765 43210"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Role / Designation
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.adminDesignation}
+                        onChange={(e) => setClientData({ ...clientData, adminDesignation: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="CEO, Marketing Manager, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Branding Tab */}
+              {activeTab === 'branding' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Branding & Display Preferences</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Preferred Display Name for Posters
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.displayName}
+                        onChange={(e) => setClientData({ ...clientData, displayName: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Acme Lucky Draw"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Brand Color
+                      </label>
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="color"
+                          value={clientData.brandColor}
+                          onChange={(e) => setClientData({ ...clientData, brandColor: e.target.value })}
+                          className="h-10 w-20 border border-gray-300 rounded cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={clientData.brandColor}
+                          onChange={(e) => setClientData({ ...clientData, brandColor: e.target.value })}
+                          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                          placeholder="#6366f1"
+                        />
+                      </div>
+                      <p className="text-sm text-gray-500 mt-1">For posters and interface theming</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Operational Tab */}
+              {activeTab === 'operational' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Operational & Configuration Details</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Default Time Zone
+                      </label>
+                      <select
+                        value={clientData.timezone}
+                        onChange={(e) => setClientData({ ...clientData, timezone: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">America/New_York (EST)</option>
+                        <option value="Europe/London">Europe/London (GMT)</option>
+                        <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                        <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Country
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.country}
+                        onChange={(e) => setClientData({ ...clientData, country: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="India"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Region / State
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.region}
+                        onChange={(e) => setClientData({ ...clientData, region: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Maharashtra, Karnataka, etc."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Expected Draw Frequency
+                      </label>
+                      <select
+                        value={clientData.drawFrequency}
+                        onChange={(e) => setClientData({ ...clientData, drawFrequency: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="campaign-based">Campaign-based</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Permissions Tab */}
+              {activeTab === 'permissions' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Lucky Draw Permissions</h2>
+                  <p className="text-sm text-gray-600 mb-4">Configure module-level permissions for this client</p>
+                  
+                  <div className="space-y-4">
+                    {luckyDrawModules.map((module) => (
+                      <div key={module} className="border border-gray-200 rounded-lg p-4">
+                        <h3 className="font-medium text-gray-900 mb-3">{module}</h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={permissions[module]?.canView}
+                              onChange={() => handlePermissionToggle(module, 'canView')}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700">View</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={permissions[module]?.canCreate}
+                              onChange={() => handlePermissionToggle(module, 'canCreate')}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700">Create</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={permissions[module]?.canEdit}
+                              onChange={() => handlePermissionToggle(module, 'canEdit')}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700">Edit</span>
+                          </label>
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={permissions[module]?.canDelete}
+                              onChange={() => handlePermissionToggle(module, 'canDelete')}
+                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700">Delete</span>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* WhatsApp Integration Tab */}
+              {activeTab === 'whatsapp' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">WhatsApp Integration</h2>
+                  <p className="text-sm text-gray-600 mb-4">Configure WhatsApp Business API credentials (all fields are encrypted)</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        WhatsApp Phone Number ID
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.whatsappPhoneNumberId}
+                        onChange={(e) => setClientData({ ...clientData, whatsappPhoneNumberId: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="123456789012345"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        WhatsApp Access Token
+                      </label>
+                      <input
+                        type="password"
+                        value={clientData.whatsappAccessToken}
+                        onChange={(e) => setClientData({ ...clientData, whatsappAccessToken: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="EAAxxxxxxxxxx..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        WhatsApp Business Account ID
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.whatsappBusinessId}
+                        onChange={(e) => setClientData({ ...clientData, whatsappBusinessId: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="123456789012345"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Webhook Secret
+                      </label>
+                      <input
+                        type="password"
+                        value={clientData.whatsappWebhookSecret}
+                        onChange={(e) => setClientData({ ...clientData, whatsappWebhookSecret: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Your webhook secret"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Verify Token
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.whatsappVerifyToken}
+                        onChange={(e) => setClientData({ ...clientData, whatsappVerifyToken: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Your verify token"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <h4 className="text-sm font-medium text-blue-900">Security Note</h4>
+                        <p className="text-sm text-blue-700 mt-1">All WhatsApp credentials are encrypted with AES-256-CBC before storage.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Compliance Tab */}
+              {activeTab === 'compliance' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Compliance & Verification</h2>
+                  
+                  <div className="space-y-4">
+                    <div className="border border-gray-200 rounded-lg p-4">
+                      <label className="flex items-start space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={clientData.dataUsageConsent}
+                          onChange={(e) => setClientData({ ...clientData, dataUsageConsent: e.target.checked })}
+                          className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 mt-0.5"
+                          required
+                        />
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">
+                            Consent for Participant Data Usage <span className="text-red-500">*</span>
+                          </span>
+                          <p className="text-sm text-gray-600 mt-1">
+                            I confirm that this organization has obtained necessary consent from participants for data collection and usage in lucky draw campaigns.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="border border-gray-200 rounded-lg p-4">
+                      <label className="flex items-start space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={clientData.dataPrivacyAcknowledged}
+                          onChange={(e) => setClientData({ ...clientData, dataPrivacyAcknowledged: e.target.checked })}
+                          className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 mt-0.5"
+                          required
+                        />
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">
+                            Data Privacy Acknowledgment <span className="text-red-500">*</span>
+                          </span>
+                          <p className="text-sm text-gray-600 mt-1">
+                            I acknowledge that this organization will comply with all applicable data privacy laws and regulations (GDPR, CCPA, etc.) when using this system.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <h4 className="text-sm font-medium text-yellow-900">Important</h4>
+                          <p className="text-sm text-yellow-700 mt-1">Both compliance checkboxes are required to create a new client.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Support Contacts Tab */}
+              {activeTab === 'support' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Communication & Support Contacts</h2>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Primary Contact Person
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.primaryContactPerson}
+                        onChange={(e) => setClientData({ ...clientData, primaryContactPerson: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="John Doe"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Support Contact Email
+                      </label>
+                      <input
+                        type="email"
+                        value={clientData.supportContactEmail}
+                        onChange={(e) => setClientData({ ...clientData, supportContactEmail: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="support@acme.com"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Escalation Contact (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={clientData.escalationContact}
+                        onChange={(e) => setClientData({ ...clientData, escalationContact: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        placeholder="escalation@acme.com or +91 98765 43210"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* WhatsApp Integration */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                <svg className="w-6 h-6 mr-2 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-                WhatsApp Integration (Optional)
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowWhatsAppSection(!showWhatsAppSection)}
-                className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center"
-              >
-                {showWhatsAppSection ? 'Hide' : 'Show'} WhatsApp Settings
-                <svg className={`w-4 h-4 ml-1 transition-transform ${showWhatsAppSection ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
-
-            {showWhatsAppSection && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 space-y-4 animate-slideDown">
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 mb-4">
-                  <p className="text-sm text-blue-700">
-                    <strong>Note:</strong> All WhatsApp credentials will be encrypted before storage. You can add these later from the tenant management page.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number ID
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.whatsappPhoneNumberId}
-                    onChange={(e) => setFormData({ ...formData, whatsappPhoneNumberId: e.target.value })}
-                    placeholder="123456789012345"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Access Token
-                  </label>
-                  <textarea
-                    value={formData.whatsappAccessToken}
-                    onChange={(e) => setFormData({ ...formData, whatsappAccessToken: e.target.value })}
-                    placeholder="EAAxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    rows={3}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Business Account ID
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.whatsappBusinessId}
-                    onChange={(e) => setFormData({ ...formData, whatsappBusinessId: e.target.value })}
-                    placeholder="987654321098765"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Webhook Secret
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.whatsappWebhookSecret}
-                      onChange={(e) => setFormData({ ...formData, whatsappWebhookSecret: e.target.value })}
-                      placeholder="your_webhook_secret"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Verify Token
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.whatsappVerifyToken}
-                      onChange={(e) => setFormData({ ...formData, whatsappVerifyToken: e.target.value })}
-                      placeholder="your_verify_token"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div className="flex space-x-4 pt-4 border-t">
+          {/* Form Actions */}
+          <div className="bg-white rounded-xl shadow-lg p-6 flex justify-between items-center">
             <button
               type="button"
               onClick={() => navigate('/tenants')}
-              className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:scale-105 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 btn-ripple font-medium"
+              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:scale-105 transition-transform shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 btn-ripple font-medium"
             >
-              {loading ? 'Creating...' : 'Create Tenant'}
+              {loading ? 'Creating Client...' : 'Create Client'}
             </button>
           </div>
         </form>
       </div>
 
-      {/* Toast Notification */}
       {toast && (
         <Toast
           message={toast.message}

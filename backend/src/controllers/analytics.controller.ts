@@ -31,7 +31,7 @@ export const getAnalytics = async (req: Request, res: Response) => {
       prisma.user.count(),
       prisma.tenant.count(),
       prisma.tenant.count({ where: { status: 'ACTIVE' } }),
-      prisma.user.count({ where: { role: { in: ['SUPER_ADMIN', 'TENANT_ADMIN'] } } })
+      prisma.user.count({ where: { role: 'ADMIN' } })
     ]);
 
     // Get activity in period

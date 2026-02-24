@@ -8,6 +8,10 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// ============================================
+// SUPER ADMIN SYSTEM MODELS
+// ============================================
+
 model User {
   id                   String                 @id @default(uuid())
   name                 String?
@@ -18,76 +22,88 @@ model User {
   tenant               Tenant?                @relation(fields: [tenantId], references: [id])
   customRoleId         String?
   customRole           CustomRole?            @relation(fields: [customRoleId], references: [id])
-  isFirstLogin         Boolean                @default(true)
-  mustChangePassword   Boolean                @default(true)
   lastLoginAt          DateTime?
-  passwordChangedAt    DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  
+  // Relations
   systemSettings       SystemSetting[]
   settingHistory       SettingHistory[]
   emailTemplates       EmailTemplate[]
   activityLogs         ActivityLog[]
   backups              Backup[]
-  createdAt            DateTime               @default(now())
-  Notification         Notification[]
-  NotificationTemplate NotificationTemplate[]
+  notifications        Notification[]
+  notificationTemplates NotificationTemplate[]
   emailLogs            EmailLog[]
   sessions             Session[]
+  
+  @@index([email])
+  @@index([role])
+  @@index([tenantId])
 }
 
 model Tenant {
-  id                      String                @id @default(uuid())
-  tenantId                String                @unique // Custom tenant ID for identification
-  name                    String
-  email                   String                @unique
-  password                String                // Hashed password for tenant login
-  status                  TenantStatus          @default(PENDING)
-  subscriptionPlan        String?
+  id                         String                   @id @default(uuid())
+  tenantId                   String                   @unique
+  name                       String
+  email                      String                   @unique
+  password                   String
+  status                     TenantStatus             @default(PENDING)
+  subscriptionPlan           String?
   
-  // Core Organization Details
-  organizationLogo        String?               // URL to logo file
-  businessCategory        String?               // Industry type
+  // Organization Details
+  organizationLogo           String?
+  businessCategory           String?
+  displayName                String?
+  brandColor                 String?                  @default("#6366f1")
   
-  // Authorized Tenant Admin Details
-  adminFullName           String?
-  adminMobileNumber       String?
-  adminDesignation        String?
+  // Admin Contact
+  adminFullName              String?
+  adminMobileNumber          String?
+  adminDesignation           String?
   
-  // Branding & Display Preferences
-  displayName             String?               // For posters
-  brandColor              String?               // Hex color code
+  // Operational Settings
+  timezone                   String?                  @default("Asia/Kolkata")
+  country                    String?                  @default("India")
+  region                     String?
+  drawFrequency              String?                  @default("monthly")
   
-  // Operational & Configuration Details
-  timezone                String?               @default("UTC")
-  country                 String?
-  region                  String?
-  drawFrequency           String?               // weekly, monthly, campaign-based
+  // Compliance
+  businessVerificationStatus String?                  @default("pending")
+  dataUsageConsent           Boolean                  @default(false)
+  dataPrivacyAcknowledged    Boolean                  @default(false)
   
-  // Compliance & Verification
-  businessVerificationStatus String?            @default("pending") // pending, verified, rejected
-  dataUsageConsent        Boolean               @default(false)
-  dataPrivacyAcknowledged Boolean               @default(false)
-  verifiedAt              DateTime?
-  verifiedBy              String?
+  // Support Contacts
+  primaryContactPerson       String?
+  supportContactEmail        String?
+  escalationContact          String?
   
-  // Communication & Support Contacts
-  primaryContactPerson    String?
-  supportContactEmail     String?
-  escalationContact       String?
+  // WhatsApp Integration (Encrypted with AES-256-CBC)
+  whatsappPhoneNumberId      String?
+  whatsappAccessToken        String?
+  whatsappBusinessId         String?
+  whatsappWebhookSecret      String?
+  whatsappVerifyToken        String?
   
-  // WhatsApp Integration Credentials (Encrypted)
-  whatsappPhoneNumberId   String?               // Encrypted
-  whatsappAccessToken     String?               // Encrypted
-  whatsappBusinessId      String?               // Encrypted
-  whatsappWebhookSecret   String?               // Encrypted
-  whatsappVerifyToken     String?               // Encrypted
+  // Timestamps
+  lastLoginAt                DateTime?
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
   
-  users                   User[]
-  permissions             TenantPermission[]
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
-  activityLogs            ActivityLog[]
-  statusHistory           TenantStatusHistory[]
-  lastLoginAt             DateTime?
+  // Super Admin Relations
+  users                      User[]
+  permissions                TenantPermission[]
+  activityLogs               ActivityLog[]
+  statusHistory              TenantStatusHistory[]
+  
+  // Lucky Draw System Relations
+  adminActivityLogs          admin_activity_log[]     @relation("TenantActivityLog")
+  contests                   contests[]               @relation("TenantContests")
+  draws                      draws[]                  @relation("TenantDraws")
+  monthlyDrawHistory         monthly_draw_history[]   @relation("TenantMonthlyDraws")
+  messages                   messages[]               @relation("TenantMessages")
+  blockAllocations           block_allocation_audit[] @relation("TenantBlockAllocations")
+  cardAllocations            card_allocation_audit[]  @relation("TenantCardAllocations")
   
   @@index([tenantId])
   @@index([email])
@@ -99,7 +115,7 @@ model TenantPermission {
   id        String   @id @default(uuid())
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  module    String   // e.g., "Campaigns", "Participants", "Winners", etc.
+  module    String
   canView   Boolean  @default(true)
   canCreate Boolean  @default(true)
   canEdit   Boolean  @default(true)
@@ -109,6 +125,22 @@ model TenantPermission {
 
   @@unique([tenantId, module])
   @@index([tenantId])
+}
+
+model TenantStatusHistory {
+  id        String       @id @default(uuid())
+  tenantId  String
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  oldStatus TenantStatus
+  newStatus TenantStatus
+  reason    String
+  changedBy String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime     @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
 }
 
 model CustomRole {
@@ -135,19 +167,7 @@ model RolePermission {
   updatedAt DateTime   @updatedAt
 
   @@unique([roleId, module])
-}
-
-enum Role {
-  SUPER_ADMIN
-  TENANT_ADMIN
-  USER
-}
-
-enum TenantStatus {
-  ACTIVE
-  INACTIVE
-  PENDING
-  SUSPENDED
+  @@index([roleId])
 }
 
 model SystemSetting {
@@ -157,13 +177,14 @@ model SystemSetting {
   value         String
   dataType      String
   description   String?
-  updatedAt     DateTime         @updatedAt
   updatedBy     String
   updatedByUser User             @relation(fields: [updatedBy], references: [id])
-  history       SettingHistory[]
   createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  history       SettingHistory[]
 
   @@unique([category, key])
+  @@index([category])
 }
 
 model SettingHistory {
@@ -176,6 +197,9 @@ model SettingHistory {
   changedByUser User          @relation(fields: [changedBy], references: [id])
   changedAt     DateTime      @default(now())
   reason        String?
+  
+  @@index([settingId])
+  @@index([changedAt])
 }
 
 model EmailTemplate {
@@ -187,10 +211,13 @@ model EmailTemplate {
   variables     String
   isActive      Boolean  @default(true)
   version       Int      @default(1)
-  updatedAt     DateTime @updatedAt
   updatedBy     String
   updatedByUser User     @relation(fields: [updatedBy], references: [id])
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([templateType])
+  @@index([isActive])
 }
 
 model ActivityLog {
@@ -211,6 +238,7 @@ model ActivityLog {
   @@index([userId])
   @@index([tenantId])
   @@index([action])
+  @@index([module])
   @@index([createdAt])
 }
 
@@ -231,6 +259,7 @@ model Notification {
   @@index([targetType, targetId])
   @@index([isRead])
   @@index([scheduledAt])
+  @@index([createdAt])
 }
 
 model NotificationTemplate {
@@ -245,6 +274,9 @@ model NotificationTemplate {
   createdByUser User     @relation(fields: [createdBy], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  @@index([name])
+  @@index([isActive])
 }
 
 model Backup {
@@ -267,17 +299,17 @@ model Backup {
 }
 
 model EmailLog {
-  id          String   @id @default(uuid())
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
-  recipient   String
-  subject     String
-  body        String
-  type        String
-  status      String   @default("pending")
-  error       String?
-  sentAt      DateTime?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  recipient String
+  subject   String
+  body      String
+  type      String
+  status    String   @default("pending")
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([status])
@@ -285,22 +317,22 @@ model EmailLog {
 }
 
 model Session {
-  id            String    @id @default(uuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token         String    @unique
-  deviceName    String?
-  deviceType    String?
-  browser       String?
-  os            String?
-  ipAddress     String?
-  location      String?
-  isActive      Boolean   @default(true)
-  lastActivity  DateTime  @default(now())
-  expiresAt     DateTime
-  createdAt     DateTime  @default(now())
-  revokedAt     DateTime?
-  revokedBy     String?
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String    @unique
+  deviceName   String?
+  deviceType   String?
+  browser      String?
+  os           String?
+  ipAddress    String?
+  location     String?
+  isActive     Boolean   @default(true)
+  lastActivity DateTime  @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  revokedBy    String?
   revokedReason String?
 
   @@index([userId])
@@ -309,18 +341,426 @@ model Session {
   @@index([expiresAt])
 }
 
-model TenantStatusHistory {
-  id          String       @id @default(uuid())
-  tenantId    String
-  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  oldStatus   TenantStatus
-  newStatus   TenantStatus
-  reason      String
-  changedBy   String
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime     @default(now())
+enum Role {
+  ADMIN
+  USER
+}
 
-  @@index([tenantId])
-  @@index([createdAt])
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
+
+// ============================================
+// LUCKY DRAW SYSTEM MODELS
+// ============================================
+
+model admin_activity_log {
+  log_id       Int             @id @default(autoincrement())
+  tenant_id    String          @db.VarChar(100)
+  action       String
+  target_table String          @db.VarChar(100)
+  target_id    Int?
+  session_id   String?         @db.VarChar(255)
+  status       activity_status @default(SUCCESS)
+  timestamp    DateTime        @default(now()) @db.Timestamp(6)
+  tenant       Tenant          @relation("TenantActivityLog", fields: [tenant_id], references: [id], onDelete: Cascade)
+
+  @@index([tenant_id])
+  @@index([timestamp])
+}
+
+model contests {
+  contest_id                Int                      @id @default(autoincrement())
+  name                      String                   @db.VarChar(150)
+  theme                     String?                  @db.VarChar(150)
+  description               String?
+  entry_form_id             Int?
+  start_date                DateTime?                @db.Timestamp(6)
+  start_time                DateTime?                @db.Timestamp(6)
+  end_date                  DateTime?                @db.Timestamp(6)
+  end_time                  DateTime?                @db.Timestamp(6)
+  mega_draw_date            DateTime?                @db.Timestamp(6)
+  entry_rules               Json?
+  status                    contest_status?          @default(DRAFT)
+  created_by                String?                  @db.VarChar(100)
+  created_at                DateTime                 @default(now()) @db.Timestamp(6)
+  qr_code_url               String?                  @db.VarChar(500)
+  approval_status           approval_status          @default(PENDING)
+  trigger_word              String?                  @unique @db.VarChar(100)
+  scratch_card_enabled      Boolean                  @default(false)
+  scratch_card_block_size   Int                      @default(10)
+  scratch_card_trigger_word String?                  @db.VarChar(100)
+  whatsapp_flow_id          String?                  @db.VarChar(50)
+  brochure_url              String?
+  instagram_url             String?
+  redemption_deadline_mega  DateTime?                @db.Date
+  redemption_deadline_store DateTime?                @db.Date
+  scratch_card_url          String?
+  winning_probability       Decimal?                 @db.Decimal(3, 2)
+  prerequisite_contest_id   Int?
+  guaranteed_winner_mode    Boolean?                 @default(false)
+  block_allocation_enabled  Boolean?                 @default(false)
+  current_block_id          Int?                     @default(1)
+  prizes_per_block          Json?                    @default("[]")
+  monthly_draw_enabled      Boolean?                 @default(false)
+  monthly_draw_date         Int?                     @default(15)
+  monthly_draw_time         DateTime?                @db.Time
+  tenant_id                 String?                  @db.VarChar(100)
+  
+  block_allocation_audits   block_allocation_audit[]
+  card_allocation_audits    card_allocation_audit[]
+  creator                   Tenant?                  @relation("TenantContests", fields: [created_by], references: [id])
+  entry_form                forms?                   @relation(fields: [entry_form_id], references: [form_id])
+  prerequisite_contest      contests?                @relation("PrerequisiteContest", fields: [prerequisite_contest_id], references: [contest_id])
+  dependent_contests        contests[]               @relation("PrerequisiteContest")
+  draws                     draws[]
+  mega_draw_entries         mega_draw_entries[]
+  monthly_draw_history      monthly_draw_history[]
+  messages                  messages[]
+  participants              participants[]
+  prizes                    prizes[]
+  scratch_card_prizes       scratch_card_prizes[]
+  scratch_participations    scratch_participations[]
+
+  @@index([created_at])
+  @@index([status])
+  @@index([mega_draw_date])
+  @@index([trigger_word])
+  @@index([scratch_card_enabled])
+  @@index([prerequisite_contest_id])
+  @@index([block_allocation_enabled])
+  @@index([tenant_id])
+  @@index([created_by])
+}
+
+model prizes {
+  prize_id    Int        @id @default(autoincrement())
+  contest_id  Int
+  prize_name  String     @db.VarChar(150)
+  prize_type  prize_type @default(DAILY)
+  value       Decimal?   @db.Decimal(12, 2)
+  quantity    Int        @default(1)
+  description String?
+  contest     contests   @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  winners     winners[]
+
+  @@index([contest_id])
+  @@index([prize_type])
+}
+
+model participants {
+  participant_id        Int             @id @default(autoincrement())
+  contest_id            Int
+  name                  String          @db.VarChar(150)
+  form_response_id      Int?
+  contact               String          @db.VarChar(150)
+  whatsapp_id           String?         @db.VarChar(50)
+  address               String?         @db.VarChar(500)
+  entry_timestamp       DateTime        @default(now()) @db.Timestamp(6)
+  validated             Boolean         @default(true)
+  unique_token          String?         @unique @db.VarChar(255)
+  daily_draw_eligible   Boolean         @default(true)
+  mega_draw_eligible    Boolean         @default(true)
+  monthly_draw_eligible Boolean         @default(true)
+  participation_month   DateTime?       @db.Date
+  tenant_id             String?         @db.VarChar(100)
+  
+  messages              messages[]
+  contest               contests        @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  form_response         form_responses? @relation(fields: [form_response_id], references: [response_id])
+  winners               winners[]
+
+  @@index([contest_id])
+  @@index([contact])
+  @@index([whatsapp_id])
+  @@index([unique_token])
+  @@index([daily_draw_eligible])
+  @@index([mega_draw_eligible])
+  @@index([monthly_draw_eligible])
+  @@index([participation_month])
+  @@index([tenant_id])
+}
+
+model draws {
+  draw_id                Int       @id @default(autoincrement())
+  contest_id             Int
+  draw_type              draw_type
+  draw_mode              draw_mode @default(RANDOM)
+  executed_by            String?   @db.VarChar(100)
+  executed_at            DateTime  @default(now()) @db.Timestamp(6)
+  total_winners          Int
+  participant_date_range Json?
+  contest                contests  @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  executor               Tenant?   @relation("TenantDraws", fields: [executed_by], references: [id])
+  winners                winners[]
+
+  @@index([contest_id])
+  @@index([draw_type])
+  @@index([executed_at])
+  @@index([executed_by])
+}
+
+model winners {
+  winner_id      Int          @id @default(autoincrement())
+  draw_id        Int
+  participant_id Int
+  winner_name    String?
+  prize_id       Int?
+  draw_type      draw_type?
+  prize_status   prize_status @default(PENDING)
+  notified       Boolean      @default(false)
+  notified_at    DateTime?    @db.Timestamp(6)
+  won_at         DateTime     @default(now()) @db.Timestamp(6)
+  draw           draws        @relation(fields: [draw_id], references: [draw_id], onDelete: Cascade)
+  participant    participants @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+  prize          prizes?      @relation(fields: [prize_id], references: [prize_id])
+
+  @@index([draw_id])
+  @@index([participant_id])
+  @@index([draw_type])
+  @@index([won_at])
+}
+
+model monthly_draw_history {
+  id                 Int      @id @default(autoincrement())
+  contest_id         Int
+  draw_month         DateTime @db.Date
+  draw_date          DateTime @db.Date
+  total_participants Int      @default(0)
+  total_winners      Int      @default(0)
+  executed_at        DateTime @default(now()) @db.Timestamp(6)
+  executed_by        String?  @db.VarChar(100)
+  status             String   @default("COMPLETED") @db.VarChar(20)
+  contest            contests @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  executor           Tenant?  @relation("TenantMonthlyDraws", fields: [executed_by], references: [id])
+
+  @@unique([contest_id, draw_month])
+  @@index([contest_id])
+  @@index([draw_month])
+  @@index([draw_date])
+  @@index([executed_by])
+}
+
+model messages {
+  message_id     Int           @id @default(autoincrement())
+  contest_id     Int?
+  participant_id Int?
+  type           message_type?
+  recipient      String?       @db.VarChar(150)
+  content        String
+  message_type   String?       @db.VarChar(50)
+  sent_at        DateTime      @default(now()) @db.Timestamp(6)
+  sent_by        String?       @db.VarChar(100)
+  is_auto        Boolean       @default(false)
+  contest        contests?     @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  participant    participants? @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+  sender         Tenant?       @relation("TenantMessages", fields: [sent_by], references: [id])
+
+  @@index([participant_id])
+  @@index([sent_at])
+  @@index([contest_id])
+  @@index([sent_by])
+}
+
+model forms {
+  form_id     Int              @id @default(autoincrement())
+  form_name   String           @db.VarChar(150)
+  form_schema Json?
+  created_at  DateTime         @default(now()) @db.Timestamp(6)
+  contests    contests[]
+  responses   form_responses[]
+}
+
+model form_responses {
+  response_id   Int            @id @default(autoincrement())
+  form_id       Int?
+  response_data Json?
+  submitted_at  DateTime       @default(now()) @db.Timestamp(6)
+  whatsapp_id   String?        @db.VarChar(50)
+  phone_number  String?        @db.VarChar(20)
+  user_name     String?        @db.VarChar(150)
+  user_category String?        @db.VarChar(100)
+  form          forms?         @relation(fields: [form_id], references: [form_id])
+  participants  participants[]
+
+  @@index([whatsapp_id])
+  @@index([phone_number])
+  @@index([submitted_at])
+}
+
+model scratch_card_prizes {
+  id                         Int                     @id @default(autoincrement())
+  contest_id                 Int
+  prize_name                 String                  @db.VarChar(150)
+  quantity                   Int                     @default(1)
+  win_positions              Int[]
+  value                      Decimal?                @db.Decimal(12, 2)
+  description                String?
+  created_at                 DateTime                @default(now()) @db.Timestamp(6)
+  current_winners            Int                     @default(0)
+  max_winners                Int                     @default(100)
+  winning_probability        Decimal                 @default(30.00) @db.Decimal(5, 2)
+  quantity_per_block         Int?                    @default(0)
+  allocated_in_current_block Int?                    @default(0)
+  card_allocations           card_allocation_audit[]
+  contest                    contests                @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+
+  @@index([contest_id])
+  @@index([winning_probability])
+  @@index([current_winners, max_winners])
+  @@index([quantity_per_block])
+}
+
+model scratch_participations {
+  id                 Int                     @id @default(autoincrement())
+  contest_id         Int
+  whatsapp_id        String                  @db.VarChar(50)
+  user_name          String                  @db.VarChar(150)
+  occupation         String                  @db.VarChar(150)
+  location           String                  @db.VarChar(150)
+  pincode            String                  @db.VarChar(10)
+  scratch_card_url   String
+  participation_date DateTime                @db.Date
+  result             String?                 @db.VarChar(20)
+  scratched_at       DateTime?               @db.Timestamp(6)
+  created_at         DateTime                @default(now()) @db.Timestamp(6)
+  card_allocations   card_allocation_audit[]
+  mega_draw_entries  mega_draw_entries[]
+  contest            contests                @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+
+  @@unique([contest_id, whatsapp_id, participation_date], name: "unique_daily_participation")
+  @@index([contest_id])
+  @@index([whatsapp_id])
+  @@index([result])
+  @@index([participation_date])
+}
+
+model mega_draw_entries {
+  id                       Int                    @id @default(autoincrement())
+  contest_id               Int
+  scratch_participation_id Int
+  whatsapp_id              String                 @db.VarChar(50)
+  user_name                String                 @db.VarChar(150)
+  occupation               String                 @db.VarChar(150)
+  location                 String                 @db.VarChar(150)
+  pincode                  String                 @db.VarChar(10)
+  entered_at               DateTime               @default(now()) @db.Timestamp(6)
+  trigger_word_used        String?                @db.VarChar(100)
+  contest                  contests               @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
+  scratch_participation    scratch_participations @relation(fields: [scratch_participation_id], references: [id], onDelete: Cascade)
+
+  @@unique([contest_id, whatsapp_id], name: "unique_contest_entry")
+  @@index([contest_id])
+  @@index([whatsapp_id])
+  @@index([scratch_participation_id])
+  @@index([trigger_word_used])
+}
+
+model block_allocation_audit {
+  audit_id             Int                     @id @default(autoincrement())
+  contest_id           Int
+  block_id             Int
+  block_size           Int
+  allocation_mode      String                  @db.VarChar(20)
+  configured_prizes    Json
+  total_cards_in_block Int                     @default(0)
+  allocated_cards      Int                     @default(0)
+  remaining_cards      Int                     @default(0)
+  allocated_prizes     Json                    @default("[]")
+  block_status         String                  @default("ACTIVE") @db.VarChar(20)
+  created_at           DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?               @default(now()) @db.Timestamptz(6)
+  created_by           String?                 @db.VarChar(100)
+  contest              contests                @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade, onUpdate: NoAction)
+  creator              Tenant?                 @relation("TenantBlockAllocations", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  card_allocations     card_allocation_audit[]
+
+  @@unique([contest_id, block_id])
+  @@index([contest_id, block_id])
+  @@index([block_status])
+  @@index([created_by])
+}
+
+model card_allocation_audit {
+  card_audit_id        Int                     @id @default(autoincrement())
+  contest_id           Int
+  block_id             Int
+  card_position        Int
+  participation_id     Int?
+  whatsapp_id          String?                 @db.VarChar(20)
+  is_winner            Boolean
+  prize_id             Int?
+  prize_name           String?                 @db.VarChar(255)
+  allocation_algorithm String                  @db.VarChar(50)
+  allocation_timestamp DateTime?               @default(now()) @db.Timestamptz(6)
+  random_seed          String?                 @db.VarChar(100)
+  allocated_by         String?                 @db.VarChar(100)
+  allocator            Tenant?                 @relation("TenantCardAllocations", fields: [allocated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  block_allocation     block_allocation_audit  @relation(fields: [contest_id, block_id], references: [contest_id, block_id], onDelete: NoAction, onUpdate: NoAction)
+  contest              contests                @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade, onUpdate: NoAction)
+  participation        scratch_participations? @relation(fields: [participation_id], references: [id], onUpdate: NoAction)
+  prize                scratch_card_prizes?    @relation(fields: [prize_id], references: [id], onUpdate: NoAction)
+
+  @@unique([contest_id, block_id, card_position])
+  @@index([contest_id, block_id])
+  @@index([participation_id])
+  @@index([allocated_by])
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum activity_status {
+  SUCCESS
+  FAILURE
+  PENDING
+}
+
+enum contest_status {
+  DRAFT
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum approval_status {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum draw_mode {
+  RANDOM
+  MANUAL
+  WEIGHTED
+}
+
+enum draw_type {
+  DAILY
+  MONTHLY
+  MEGA
+}
+
+enum prize_type {
+  DAILY
+  MONTHLY
+  MEGA
+}
+
+enum message_type {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum prize_status {
+  PENDING
+  CLAIMED
+  SHIPPED
 }

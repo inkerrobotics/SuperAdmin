@@ -100,9 +100,7 @@ export class UsersService {
         password: hashedPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
-        tenantId: data.tenantId,
-        isFirstLogin: true,
-        mustChangePassword: true
+        tenantId: data.tenantId
       },
       select: {
         id: true,
@@ -117,8 +115,6 @@ export class UsersService {
           }
         },
         tenantId: true,
-        isFirstLogin: true,
-        mustChangePassword: true,
         createdAt: true
       }
     });
@@ -321,9 +317,9 @@ export class UsersService {
       throw error;
     }
 
-    // Prevent deleting super admin
-    if (user.role === 'SUPER_ADMIN') {
-      const error: any = new Error('Cannot delete Super Admin user');
+    // Prevent deleting admin
+    if (user.role === 'ADMIN') {
+      const error: any = new Error('Cannot delete Admin user');
       error.statusCode = 400;
       throw error;
     }
@@ -372,8 +368,8 @@ export class UsersService {
       return user.customRole.permissions;
     }
 
-    // If SUPER_ADMIN, return all permissions
-    if (user.role === 'SUPER_ADMIN') {
+    // If ADMIN, return all permissions
+    if (user.role === 'ADMIN') {
       return 'ALL';
     }
 
@@ -406,8 +402,7 @@ export class UsersService {
       where: { id: userId },
       data: {
         password: hashedPassword,
-        isFirstLogin: true,
-        mustChangePassword: true
+        lastLoginAt: new Date()
       }
     });
 
@@ -473,9 +468,7 @@ export class UsersService {
       where: { id: userId },
       data: {
         password: hashedPassword,
-        isFirstLogin: false,
-        mustChangePassword: false,
-        passwordChangedAt: new Date()
+        lastLoginAt: new Date()
       }
     });
 

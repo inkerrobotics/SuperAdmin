@@ -1,7 +1,6 @@
 import { PrismaClient, TenantStatus } from '@prisma/client';
 import { ActivityLogsService } from './activity-logs.service';
 import { CryptoUtil } from '../utils/crypto.util';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const activityLogsService = new ActivityLogsService();
@@ -16,6 +15,8 @@ export class TenantsService {
     page?: number;
     limit?: number;
   }) {
+    console.log('📋 [TenantsService] Getting all tenants with filters:', filters);
+    
     const page = filters?.page || 1;
     const limit = filters?.limit || 20;
     const skip = (page - 1) * limit;
@@ -24,6 +25,7 @@ export class TenantsService {
 
     if (filters?.status) {
       where.status = filters.status;
+      console.log(`🔍 [TenantsService] Filtering by status: ${filters.status}`);
     }
 
     if (filters?.search) {
@@ -31,12 +33,26 @@ export class TenantsService {
         { name: { contains: filters.search, mode: 'insensitive' } },
         { email: { contains: filters.search, mode: 'insensitive' } }
       ];
+      console.log(`🔍 [TenantsService] Searching for: ${filters.search}`);
     }
 
     const [tenants, total] = await Promise.all([
       prisma.tenant.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          tenantId: true,
+          name: true,
+          email: true,
+          status: true,
+          subscriptionPlan: true,
+          organizationLogo: true,
+          businessCategory: true,
+          displayName: true,
+          businessVerificationStatus: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
           users: {
             select: {
               id: true,
@@ -60,6 +76,8 @@ export class TenantsService {
       prisma.tenant.count({ where })
     ]);
 
+    console.log(`✅ [TenantsService] Found ${tenants.length} tenants (Total: ${total}, Page: ${page}/${Math.ceil(total / limit)})`);
+
     return {
       tenants,
       pagination: {
@@ -72,12 +90,15 @@ export class TenantsService {
   }
 
   /**
-   * Get tenant by ID
+   * Get tenant by ID with all related data
    */
   async getTenantById(id: string) {
+    console.log(`🔍 [TenantsService] Getting tenant by ID: ${id}`);
+    
     const tenant = await prisma.tenant.findUnique({
       where: { id },
       include: {
+        permissions: true,
         users: {
           select: {
             id: true,
@@ -103,12 +124,207 @@ export class TenantsService {
     });
 
     if (!tenant) {
+      console.log(`❌ [TenantsService] Tenant not found: ${id}`);
       const error: any = new Error('Tenant not found');
       error.statusCode = 404;
       throw error;
     }
 
-    return tenant;
+    console.log(`✅ [TenantsService] Found tenant: ${tenant.name} (${tenant.tenantId})`);
+
+    // Don't return encrypted credentials in detail view
+    const { 
+      whatsappPhoneNumberId, 
+      whatsappAccessToken, 
+      whatsappBusinessId, 
+      whatsappWebhookSecret, 
+      whatsappVerifyToken,
+      password,
+      ...tenantData 
+    } = tenant;
+
+    return {
+      ...tenantData,
+      whatsappConfigured: !!(whatsappPhoneNumberId && whatsappAccessToken)
+    };
+  }
+
+  /**
+   * Create new tenant
+   */
+  async createTenant(data: {
+    // Basic Information
+    name: string;
+    email: string;
+    password: string;
+    subscriptionPlan?: string;
+    
+    // Organization fields
+    organizationLogo?: string;
+    businessCategory?: string;
+    adminFullName?: string;
+    adminMobileNumber?: string;
+    adminDesignation?: string;
+    displayName?: string;
+    brandColor?: string;
+    timezone?: string;
+    country?: string;
+    region?: string;
+    drawFrequency?: string;
+    dataUsageConsent: boolean;
+    dataPrivacyAcknowledged: boolean;
+    primaryContactPerson?: string;
+    supportContactEmail?: string;
+    escalationContact?: string;
+    
+    // WhatsApp credentials
+    whatsappPhoneNumberId?: string;
+    whatsappAccessToken?: string;
+    whatsappBusinessId?: string;
+    whatsappWebhookSecret?: string;
+    whatsappVerifyToken?: string;
+    
+    // Permissions
+    permissions?: Array<{
+      module: string;
+      canView: boolean;
+      canCreate: boolean;
+      canEdit: boolean;
+      canDelete: boolean;
+    }>;
+  }, createdBy?: string) {
+    console.log('🆕 [TenantsService] Creating new tenant:', { name: data.name, email: data.email });
+    
+    // Check if email already exists
+    const existing = await prisma.tenant.findUnique({
+      where: { email: data.email }
+    });
+
+    if (existing) {
+      console.log(`❌ [TenantsService] Tenant already exists with email: ${data.email}`);
+      const error: any = new Error('Tenant with this email already exists');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Validate compliance
+    if (!data.dataUsageConsent || !data.dataPrivacyAcknowledged) {
+      console.log('❌ [TenantsService] Compliance validation failed');
+      const error: any = new Error('Data usage consent and privacy acknowledgment are required');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Generate tenant ID
+    const tenantId = CryptoUtil.generateTenantId();
+    console.log(`🔑 [TenantsService] Generated tenant ID: ${tenantId}`);
+
+    // DON'T hash password - send plain text to Lucky Draw backend
+    // Lucky Draw backend will hash it with SHA-256
+    const plainPassword = data.password;
+    console.log('🔐 [TenantsService] Password stored as plain text (will be hashed by Lucky Draw backend with SHA-256)');
+
+    // Prepare tenant data
+    const tenantData: any = {
+      tenantId,
+      name: data.name,
+      email: data.email,
+      password: plainPassword,  // Plain text password for Lucky Draw backend
+      subscriptionPlan: data.subscriptionPlan || 'Basic',
+      status: 'PENDING' as TenantStatus,
+      
+      // Organization details
+      organizationLogo: data.organizationLogo,
+      businessCategory: data.businessCategory,
+      adminFullName: data.adminFullName,
+      adminMobileNumber: data.adminMobileNumber,
+      adminDesignation: data.adminDesignation,
+      displayName: data.displayName || data.name,
+      brandColor: data.brandColor || '#6366f1',
+      timezone: data.timezone || 'Asia/Kolkata',
+      country: data.country || 'India',
+      region: data.region,
+      drawFrequency: data.drawFrequency || 'monthly',
+      dataUsageConsent: data.dataUsageConsent,
+      dataPrivacyAcknowledged: data.dataPrivacyAcknowledged,
+      businessVerificationStatus: 'pending',
+      primaryContactPerson: data.primaryContactPerson,
+      supportContactEmail: data.supportContactEmail,
+      escalationContact: data.escalationContact
+    };
+
+    // Encrypt WhatsApp credentials
+    if (data.whatsappPhoneNumberId) {
+      tenantData.whatsappPhoneNumberId = CryptoUtil.encrypt(data.whatsappPhoneNumberId);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Phone Number ID');
+    }
+    if (data.whatsappAccessToken) {
+      tenantData.whatsappAccessToken = CryptoUtil.encrypt(data.whatsappAccessToken);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Access Token');
+    }
+    if (data.whatsappBusinessId) {
+      tenantData.whatsappBusinessId = CryptoUtil.encrypt(data.whatsappBusinessId);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Business ID');
+    }
+    if (data.whatsappWebhookSecret) {
+      tenantData.whatsappWebhookSecret = CryptoUtil.encrypt(data.whatsappWebhookSecret);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Webhook Secret');
+    }
+    if (data.whatsappVerifyToken) {
+      tenantData.whatsappVerifyToken = CryptoUtil.encrypt(data.whatsappVerifyToken);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Verify Token');
+    }
+
+    console.log('💾 [TenantsService] Creating tenant in database...');
+
+    // Create tenant with permissions in a transaction
+    const tenant = await prisma.$transaction(async (tx) => {
+      const newTenant = await tx.tenant.create({
+        data: tenantData
+      });
+
+      console.log(`✅ [TenantsService] Tenant created in database: ${newTenant.id}`);
+
+      // Create permissions if provided
+      if (data.permissions && data.permissions.length > 0) {
+        await tx.tenantPermission.createMany({
+          data: data.permissions.map(perm => ({
+            tenantId: newTenant.id,
+            module: perm.module,
+            canView: perm.canView,
+            canCreate: perm.canCreate,
+            canEdit: perm.canEdit,
+            canDelete: perm.canDelete
+          }))
+        });
+        console.log(`🔐 [TenantsService] Created ${data.permissions.length} permission entries`);
+      }
+
+      return newTenant;
+    });
+
+    // Log activity
+    if (createdBy) {
+      await activityLogsService.createLog({
+        userId: createdBy,
+        tenantId: tenant.id,
+        action: 'create_tenant',
+        module: 'Tenants',
+        description: `Created new tenant: ${tenant.name} (${tenantId})`,
+        status: 'success'
+      });
+      console.log('📝 [TenantsService] Activity log created');
+    }
+
+    console.log(`🎉 [TenantsService] Tenant creation completed successfully: ${tenant.name} (${tenantId})`);
+
+    return {
+      id: tenant.id,
+      tenantId: tenantId,
+      name: tenant.name,
+      status: tenant.status,
+      message: 'Client created successfully'
+    };
   }
 
   /**
@@ -121,28 +337,29 @@ export class TenantsService {
     changedBy: string,
     metadata?: { ipAddress?: string; userAgent?: string }
   ) {
-    // Get current tenant
+    console.log(`🔄 [TenantsService] Updating tenant status: ${tenantId} -> ${newStatus}`);
+    console.log(`📝 [TenantsService] Reason: ${reason}`);
+    
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId }
     });
 
     if (!tenant) {
+      console.log(`❌ [TenantsService] Tenant not found: ${tenantId}`);
       const error: any = new Error('Tenant not found');
       error.statusCode = 404;
       throw error;
     }
 
     const oldStatus = tenant.status;
+    console.log(`📊 [TenantsService] Status change: ${oldStatus} -> ${newStatus}`);
 
-    // Update tenant status and create history record in a transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Update tenant status
       const updatedTenant = await tx.tenant.update({
         where: { id: tenantId },
         data: { status: newStatus }
       });
 
-      // Create status history record
       await tx.tenantStatusHistory.create({
         data: {
           tenantId,
@@ -155,10 +372,10 @@ export class TenantsService {
         }
       });
 
+      console.log('📝 [TenantsService] Status history entry created');
       return updatedTenant;
     });
 
-    // Log activity
     await activityLogsService.createLog({
       userId: changedBy,
       tenantId,
@@ -171,28 +388,17 @@ export class TenantsService {
       metadata: JSON.stringify({ oldStatus, newStatus, reason })
     });
 
+    console.log(`✅ [TenantsService] Tenant status updated successfully: ${tenant.name}`);
+
     return result;
-  }
-
-  /**
-   * Get tenant status history
-   */
-  async getTenantStatusHistory(tenantId: string, limit: number = 50) {
-    const history = await prisma.tenantStatusHistory.findMany({
-      where: { tenantId },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: limit
-    });
-
-    return history;
   }
 
   /**
    * Get tenant statistics
    */
   async getTenantStats() {
+    console.log('📊 [TenantsService] Getting tenant statistics...');
+    
     const [total, active, inactive, pending, suspended] = await Promise.all([
       prisma.tenant.count(),
       prisma.tenant.count({ where: { status: 'ACTIVE' } }),
@@ -200,6 +406,8 @@ export class TenantsService {
       prisma.tenant.count({ where: { status: 'PENDING' } }),
       prisma.tenant.count({ where: { status: 'SUSPENDED' } })
     ]);
+
+    console.log(`✅ [TenantsService] Stats: Total=${total}, Active=${active}, Inactive=${inactive}, Pending=${pending}, Suspended=${suspended}`);
 
     return {
       total,
@@ -220,11 +428,15 @@ export class TenantsService {
     changedBy: string,
     metadata?: { ipAddress?: string; userAgent?: string }
   ) {
+    console.log(`🔄 [TenantsService] Bulk updating ${tenantIds.length} tenants to status: ${newStatus}`);
+    
     const results = await Promise.all(
       tenantIds.map(id => 
         this.updateTenantStatus(id, newStatus, reason, changedBy, metadata)
       )
     );
+
+    console.log(`✅ [TenantsService] Bulk update completed: ${results.length} tenants updated`);
 
     return {
       count: results.length,
@@ -233,106 +445,22 @@ export class TenantsService {
   }
 
   /**
-   * Create new tenant with login credentials and WhatsApp integration
+   * Get tenant status history
    */
-  async createTenant(data: {
-    name: string;
-    email: string;
-    password: string;
-    subscriptionPlan?: string;
-    whatsappPhoneNumberId?: string;
-    whatsappAccessToken?: string;
-    whatsappBusinessId?: string;
-    whatsappWebhookSecret?: string;
-    whatsappVerifyToken?: string;
-    permissions?: Array<{
-      module: string;
-      canView: boolean;
-      canCreate: boolean;
-      canEdit: boolean;
-      canDelete: boolean;
-    }>;
-  }, createdBy?: string) {
-    // Check if email already exists
-    const existing = await prisma.tenant.findUnique({
-      where: { email: data.email }
+  async getTenantStatusHistory(tenantId: string, limit: number = 50) {
+    console.log(`📜 [TenantsService] Getting status history for tenant: ${tenantId} (limit: ${limit})`);
+    
+    const history = await prisma.tenantStatusHistory.findMany({
+      where: { tenantId },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit
     });
 
-    if (existing) {
-      const error: any = new Error('Tenant with this email already exists');
-      error.statusCode = 400;
-      throw error;
-    }
+    console.log(`✅ [TenantsService] Found ${history.length} status history entries`);
 
-    // Generate tenant ID
-    const tenantId = CryptoUtil.generateTenantId();
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // Encrypt WhatsApp credentials
-    const encryptedData: any = {
-      tenantId,
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      subscriptionPlan: data.subscriptionPlan,
-      status: 'PENDING' as TenantStatus
-    };
-
-    if (data.whatsappPhoneNumberId) {
-      encryptedData.whatsappPhoneNumberId = CryptoUtil.encrypt(data.whatsappPhoneNumberId);
-    }
-    if (data.whatsappAccessToken) {
-      encryptedData.whatsappAccessToken = CryptoUtil.encrypt(data.whatsappAccessToken);
-    }
-    if (data.whatsappBusinessId) {
-      encryptedData.whatsappBusinessId = CryptoUtil.encrypt(data.whatsappBusinessId);
-    }
-    if (data.whatsappWebhookSecret) {
-      encryptedData.whatsappWebhookSecret = CryptoUtil.encrypt(data.whatsappWebhookSecret);
-    }
-    if (data.whatsappVerifyToken) {
-      encryptedData.whatsappVerifyToken = CryptoUtil.encrypt(data.whatsappVerifyToken);
-    }
-
-    // Create tenant with permissions in a transaction
-    const tenant = await prisma.$transaction(async (tx) => {
-      // Create tenant
-      const newTenant = await tx.tenant.create({
-        data: encryptedData
-      });
-
-      // Create permissions if provided
-      if (data.permissions && data.permissions.length > 0) {
-        await (tx as any).tenantPermission.createMany({
-          data: data.permissions.map(perm => ({
-            tenantId: newTenant.id,
-            module: perm.module,
-            canView: perm.canView,
-            canCreate: perm.canCreate,
-            canEdit: perm.canEdit,
-            canDelete: perm.canDelete
-          }))
-        });
-      }
-
-      return newTenant;
-    });
-
-    // Log activity
-    if (createdBy) {
-      await activityLogsService.createLog({
-        userId: createdBy,
-        tenantId: tenant.id,
-        action: 'create_tenant',
-        module: 'Tenants',
-        description: `Created new tenant: ${tenant.name} (${(tenant as any).tenantId})`,
-        status: 'success'
-      });
-    }
-
-    return tenant;
+    return history;
   }
 
   /**
@@ -342,52 +470,100 @@ export class TenantsService {
     tenantId: string,
     data: {
       password?: string;
-      whatsappPhoneNumberId?: string;
-      whatsappAccessToken?: string;
-      whatsappBusinessId?: string;
-      whatsappWebhookSecret?: string;
-      whatsappVerifyToken?: string;
     },
     updatedBy?: string
   ) {
+    console.log(`🔐 [TenantsService] Updating credentials for tenant: ${tenantId}`);
+    
     const updateData: any = {};
 
     if (data.password) {
-      updateData.password = await bcrypt.hash(data.password, 10);
-    }
-    if (data.whatsappPhoneNumberId) {
-      updateData.whatsappPhoneNumberId = CryptoUtil.encrypt(data.whatsappPhoneNumberId);
-    }
-    if (data.whatsappAccessToken) {
-      updateData.whatsappAccessToken = CryptoUtil.encrypt(data.whatsappAccessToken);
-    }
-    if (data.whatsappBusinessId) {
-      updateData.whatsappBusinessId = CryptoUtil.encrypt(data.whatsappBusinessId);
-    }
-    if (data.whatsappWebhookSecret) {
-      updateData.whatsappWebhookSecret = CryptoUtil.encrypt(data.whatsappWebhookSecret);
-    }
-    if (data.whatsappVerifyToken) {
-      updateData.whatsappVerifyToken = CryptoUtil.encrypt(data.whatsappVerifyToken);
+      // DON'T hash password - send plain text to Lucky Draw backend
+      // Lucky Draw backend will hash it with SHA-256
+      updateData.password = data.password;
+      console.log('🔑 [TenantsService] Password updated (plain text for Lucky Draw backend)');
     }
 
-    const tenant = await prisma.tenant.update({
+    await prisma.tenant.update({
       where: { id: tenantId },
       data: updateData
     });
 
-    // Log activity
     if (updatedBy) {
       await activityLogsService.createLog({
         userId: updatedBy,
-        tenantId: tenant.id,
+        tenantId,
         action: 'update_tenant_credentials',
         module: 'Tenants',
-        description: `Updated credentials for tenant: ${tenant.name}`,
+        description: `Updated credentials for tenant`,
         status: 'success'
       });
+      console.log('📝 [TenantsService] Activity log created');
     }
 
+    console.log(`✅ [TenantsService] Tenant credentials updated successfully`);
+
     return { message: 'Tenant credentials updated successfully' };
+  }
+
+  /**
+   * Update WhatsApp credentials
+   */
+  async updateWhatsAppCredentials(
+    tenantId: string,
+    credentials: {
+      phoneNumberId?: string;
+      accessToken?: string;
+      businessId?: string;
+      webhookSecret?: string;
+      verifyToken?: string;
+    },
+    updatedBy?: string
+  ) {
+    console.log(`💬 [TenantsService] Updating WhatsApp credentials for tenant: ${tenantId}`);
+    
+    const updateData: any = {};
+
+    if (credentials.phoneNumberId) {
+      updateData.whatsappPhoneNumberId = CryptoUtil.encrypt(credentials.phoneNumberId);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Phone Number ID');
+    }
+    if (credentials.accessToken) {
+      updateData.whatsappAccessToken = CryptoUtil.encrypt(credentials.accessToken);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Access Token');
+    }
+    if (credentials.businessId) {
+      updateData.whatsappBusinessId = CryptoUtil.encrypt(credentials.businessId);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Business ID');
+    }
+    if (credentials.webhookSecret) {
+      updateData.whatsappWebhookSecret = CryptoUtil.encrypt(credentials.webhookSecret);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Webhook Secret');
+    }
+    if (credentials.verifyToken) {
+      updateData.whatsappVerifyToken = CryptoUtil.encrypt(credentials.verifyToken);
+      console.log('🔒 [TenantsService] Encrypted WhatsApp Verify Token');
+    }
+
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: updateData
+    });
+
+    if (updatedBy) {
+      await activityLogsService.createLog({
+        userId: updatedBy,
+        tenantId,
+        action: 'update_whatsapp_credentials',
+        module: 'Tenants',
+        description: `Updated WhatsApp integration credentials`,
+        status: 'success'
+      });
+      console.log('📝 [TenantsService] Activity log created');
+    }
+
+    console.log(`✅ [TenantsService] WhatsApp credentials updated successfully`);
+
+    return { message: 'WhatsApp credentials updated successfully' };
   }
 }
