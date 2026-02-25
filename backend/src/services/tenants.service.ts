@@ -43,7 +43,6 @@ export class TenantsService {
           id: true,
           tenantId: true,
           name: true,
-          email: true,
           status: true,
           subscriptionPlan: true,
           organizationLogo: true,
@@ -53,6 +52,11 @@ export class TenantsService {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
+          auth: {
+            select: {
+              email: true
+            }
+          },
           users: {
             select: {
               id: true,
@@ -98,7 +102,11 @@ export class TenantsService {
     const tenant = await prisma.tenant.findUnique({
       where: { id },
       include: {
-        permissions: true,
+        auth: {
+          include: {
+            permissions: true
+          }
+        },
         users: {
           select: {
             id: true,
@@ -132,19 +140,21 @@ export class TenantsService {
 
     console.log(`✅ [TenantsService] Found tenant: ${tenant.name} (${tenant.tenantId})`);
 
-    // Don't return encrypted credentials in detail view
+    // Don't return encrypted credentials and password in detail view
     const { 
       whatsappPhoneNumberId, 
       whatsappAccessToken, 
       whatsappBusinessId, 
       whatsappWebhookSecret, 
       whatsappVerifyToken,
-      password,
+      auth,
       ...tenantData 
     } = tenant;
 
     return {
       ...tenantData,
+      email: auth?.email,
+      permissions: auth?.permissions || [],
       whatsappConfigured: !!(whatsappPhoneNumberId && whatsappAccessToken)
     };
   }
@@ -195,8 +205,8 @@ export class TenantsService {
   }, createdBy?: string) {
     console.log('🆕 [TenantsService] Creating new tenant:', { name: data.name, email: data.email });
     
-    // Check if email already exists
-    const existing = await prisma.tenant.findUnique({
+    // Check if email already exists in TenantAuth
+    const existing = await prisma.tenantAuth.findUnique({
       where: { email: data.email }
     });
 
@@ -224,12 +234,10 @@ export class TenantsService {
     const plainPassword = data.password;
     console.log('🔐 [TenantsService] Password stored as plain text (will be hashed by Lucky Draw backend with SHA-256)');
 
-    // Prepare tenant data
+    // Prepare tenant details data
     const tenantData: any = {
       tenantId,
       name: data.name,
-      email: data.email,
-      password: plainPassword,  // Plain text password for Lucky Draw backend
       subscriptionPlan: data.subscriptionPlan || 'Basic',
       status: 'PENDING' as TenantStatus,
       
@@ -277,19 +285,29 @@ export class TenantsService {
 
     console.log('💾 [TenantsService] Creating tenant in database...');
 
-    // Create tenant with permissions in a transaction
-    const tenant = await prisma.$transaction(async (tx) => {
+    // Create tenant with auth and permissions in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Tenant (details)
       const newTenant = await tx.tenant.create({
         data: tenantData
       });
+      console.log(`✅ [TenantsService] Tenant details created: ${newTenant.id}`);
 
-      console.log(`✅ [TenantsService] Tenant created in database: ${newTenant.id}`);
+      // 2. Create TenantAuth (login credentials)
+      const newAuth = await tx.tenantAuth.create({
+        data: {
+          tenantId: tenantId,
+          email: data.email,
+          password: plainPassword  // Plain text password for Lucky Draw backend
+        }
+      });
+      console.log(`✅ [TenantsService] Tenant auth created: ${newAuth.id}`);
 
-      // Create permissions if provided
+      // 3. Create permissions if provided
       if (data.permissions && data.permissions.length > 0) {
         await tx.tenantPermission.createMany({
           data: data.permissions.map(perm => ({
-            tenantId: newTenant.id,
+            authId: newAuth.id,
             module: perm.module,
             canView: perm.canView,
             canCreate: perm.canCreate,
@@ -300,29 +318,29 @@ export class TenantsService {
         console.log(`🔐 [TenantsService] Created ${data.permissions.length} permission entries`);
       }
 
-      return newTenant;
+      return { tenant: newTenant, auth: newAuth };
     });
 
     // Log activity
     if (createdBy) {
       await activityLogsService.createLog({
         userId: createdBy,
-        tenantId: tenant.id,
+        tenantId: result.tenant.id,
         action: 'create_tenant',
         module: 'Tenants',
-        description: `Created new tenant: ${tenant.name} (${tenantId})`,
+        description: `Created new tenant: ${result.tenant.name} (${tenantId})`,
         status: 'success'
       });
       console.log('📝 [TenantsService] Activity log created');
     }
 
-    console.log(`🎉 [TenantsService] Tenant creation completed successfully: ${tenant.name} (${tenantId})`);
+    console.log(`🎉 [TenantsService] Tenant creation completed successfully: ${result.tenant.name} (${tenantId})`);
 
     return {
-      id: tenant.id,
+      id: result.tenant.id,
       tenantId: tenantId,
-      name: tenant.name,
-      status: tenant.status,
+      name: result.tenant.name,
+      status: result.tenant.status,
       message: 'Client created successfully'
     };
   }
@@ -470,11 +488,24 @@ export class TenantsService {
     tenantId: string,
     data: {
       password?: string;
+      email?: string;
     },
     updatedBy?: string
   ) {
     console.log(`🔐 [TenantsService] Updating credentials for tenant: ${tenantId}`);
     
+    // Find the tenant auth by tenantId
+    const auth = await prisma.tenantAuth.findUnique({
+      where: { tenantId }
+    });
+
+    if (!auth) {
+      console.log(`❌ [TenantsService] Tenant auth not found: ${tenantId}`);
+      const error: any = new Error('Tenant not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
     const updateData: any = {};
 
     if (data.password) {
@@ -484,21 +515,33 @@ export class TenantsService {
       console.log('🔑 [TenantsService] Password updated (plain text for Lucky Draw backend)');
     }
 
-    await prisma.tenant.update({
-      where: { id: tenantId },
+    if (data.email) {
+      updateData.email = data.email;
+      console.log('� [TenantsService] Email updated');
+    }
+
+    await prisma.tenantAuth.update({
+      where: { id: auth.id },
       data: updateData
     });
 
     if (updatedBy) {
-      await activityLogsService.createLog({
-        userId: updatedBy,
-        tenantId,
-        action: 'update_tenant_credentials',
-        module: 'Tenants',
-        description: `Updated credentials for tenant`,
-        status: 'success'
+      // Find tenant by tenantId for activity log
+      const tenant = await prisma.tenant.findUnique({
+        where: { tenantId }
       });
-      console.log('📝 [TenantsService] Activity log created');
+
+      if (tenant) {
+        await activityLogsService.createLog({
+          userId: updatedBy,
+          tenantId: tenant.id,
+          action: 'update_tenant_credentials',
+          module: 'Tenants',
+          description: `Updated credentials for tenant`,
+          status: 'success'
+        });
+        console.log('📝 [TenantsService] Activity log created');
+      }
     }
 
     console.log(`✅ [TenantsService] Tenant credentials updated successfully`);

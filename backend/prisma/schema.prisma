@@ -42,12 +42,28 @@ model User {
   @@index([tenantId])
 }
 
+// TenantAuth - Login credentials and permissions only
+model TenantAuth {
+  id          String             @id @default(uuid())
+  tenantId    String             @unique
+  email       String             @unique
+  password    String             // Plain text for Lucky Draw backend (SHA-256)
+  permissions TenantPermission[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  
+  // Relation to Tenant details
+  tenant      Tenant             @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  
+  @@index([tenantId])
+  @@index([email])
+}
+
+// Tenant - Organization details and configuration
 model Tenant {
   id                         String                   @id @default(uuid())
   tenantId                   String                   @unique
   name                       String
-  email                      String                   @unique
-  password                   String
   status                     TenantStatus             @default(PENDING)
   subscriptionPlan           String?
   
@@ -90,9 +106,11 @@ model Tenant {
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
   
+  // Relation to TenantAuth
+  auth                       TenantAuth?
+  
   // Super Admin Relations
   users                      User[]
-  permissions                TenantPermission[]
   activityLogs               ActivityLog[]
   statusHistory              TenantStatusHistory[]
   
@@ -106,25 +124,24 @@ model Tenant {
   cardAllocations            card_allocation_audit[]  @relation("TenantCardAllocations")
   
   @@index([tenantId])
-  @@index([email])
   @@index([status])
   @@index([businessVerificationStatus])
 }
 
 model TenantPermission {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id        String     @id @default(uuid())
+  authId    String
+  auth      TenantAuth @relation(fields: [authId], references: [id], onDelete: Cascade)
   module    String
-  canView   Boolean  @default(true)
-  canCreate Boolean  @default(true)
-  canEdit   Boolean  @default(true)
-  canDelete Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  canView   Boolean    @default(true)
+  canCreate Boolean    @default(true)
+  canEdit   Boolean    @default(true)
+  canDelete Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
-  @@unique([tenantId, module])
-  @@index([tenantId])
+  @@unique([authId, module])
+  @@index([authId])
 }
 
 model TenantStatusHistory {
