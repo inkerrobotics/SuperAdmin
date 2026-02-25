@@ -286,7 +286,7 @@ export class TenantsService {
     console.log('💾 [TenantsService] Creating tenant in database...');
 
     // Create tenant with auth and permissions in a transaction
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // 1. Create Tenant (details)
       const newTenant = await tx.tenant.create({
         data: tenantData
@@ -372,7 +372,7 @@ export class TenantsService {
     const oldStatus = tenant.status;
     console.log(`📊 [TenantsService] Status change: ${oldStatus} -> ${newStatus}`);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const updatedTenant = await tx.tenant.update({
         where: { id: tenantId },
         data: { status: newStatus }
