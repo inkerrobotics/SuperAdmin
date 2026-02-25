@@ -12,7 +12,7 @@
     "seed:data": "ts-node scripts/seed-sample-data.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.9.0",
+    "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/nodemailer": "^7.0.10",
     "@types/ua-parser-js": "^0.7.39",
