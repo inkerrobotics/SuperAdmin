@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { CryptoUtil } from '../utils/crypto.util';
 import { ActivityLogsService } from './activity-logs.service';
@@ -56,8 +55,8 @@ export class TenantAuthService {
       throw error;
     }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, tenant.password);
+    // Verify password (plain text comparison)
+    const isPasswordValid = password === tenant.password;
 
     if (!isPasswordValid) {
       await activityLogsService.createLog({
@@ -226,8 +225,8 @@ export class TenantAuthService {
       throw error;
     }
 
-    // Verify old password
-    const isPasswordValid = await bcrypt.compare(oldPassword, tenant.password);
+    // Verify old password (plain text comparison)
+    const isPasswordValid = oldPassword === tenant.password;
 
     if (!isPasswordValid) {
       const error: any = new Error('Current password is incorrect');
@@ -235,14 +234,11 @@ export class TenantAuthService {
       throw error;
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password
+    // Update password (plain text - no hashing)
     await prisma.tenant.update({
       where: { id: tenantId },
       data: {
-        password: hashedPassword
+        password: newPassword
       }
     });
 

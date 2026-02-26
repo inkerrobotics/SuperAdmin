@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import { ActivityLogsService } from './activity-logs.service';
 import { EmailService } from './email.service';
 
@@ -89,15 +88,12 @@ export class UsersService {
     // Generate temporary password if not provided
     const temporaryPassword = data.password || emailService.generateTemporaryPassword();
     
-    // Hash password
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
-
-    // Create user
+    // Create user (plain text password - no hashing)
     const user = await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
-        password: hashedPassword,
+        password: temporaryPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -246,19 +242,13 @@ export class UsersService {
       }
     }
 
-    // Hash password if provided
-    let hashedPassword;
-    if (data.password) {
-      hashedPassword = await bcrypt.hash(data.password, 10);
-    }
-
-    // Update user
+    // Update user (plain text password - no hashing)
     const updated = await prisma.user.update({
       where: { id },
       data: {
         name: data.name,
         email: data.email,
-        password: hashedPassword,
+        password: data.password,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -393,15 +383,14 @@ export class UsersService {
       throw error;
     }
 
-    // Generate new temporary password
+    // Generate new temporary password (plain text - no hashing)
     const temporaryPassword = emailService.generateTemporaryPassword();
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
     // Update user with new password and reset flags
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword,
+        password: temporaryPassword,
         lastLoginAt: new Date()
       }
     });
@@ -453,21 +442,18 @@ export class UsersService {
     }
 
     // Verify old password
-    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    const isPasswordValid = oldPassword === user.password;
     if (!isPasswordValid) {
       const error: any = new Error('Current password is incorrect');
       error.statusCode = 400;
       throw error;
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update password and reset flags
+    // Update password (plain text - no hashing)
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword,
+        password: newPassword,
         lastLoginAt: new Date()
       }
     });

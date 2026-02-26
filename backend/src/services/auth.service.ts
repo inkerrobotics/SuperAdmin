@@ -1,4 +1,3 @@
-import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient, Role } from '@prisma/client';
 import { ActivityLogsService } from './activity-logs.service';
@@ -45,7 +44,7 @@ export class AuthService {
       throw error;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = password === user.password;
     if (!isPasswordValid) {
       // Log failed login attempt
       await activityLogsService.createLog({
@@ -138,7 +137,7 @@ export class AuthService {
       throw error;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = password === user.password;
     if (!isPasswordValid) {
       // Log failed login attempt
       await activityLogsService.createLog({

@@ -1,5 +1,4 @@
 import { PrismaClient, Role } from '@prisma/client';
-import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -18,14 +17,11 @@ async function createSuperAdmin() {
       return;
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create super admin
+    // Create super admin (plain text password - no hashing)
     const superAdmin = await prisma.user.create({
       data: {
         email,
-        password: hashedPassword,
+        password: password,  // Plain text password
         role: Role.ADMIN,
         name: 'Super Admin'
       }
