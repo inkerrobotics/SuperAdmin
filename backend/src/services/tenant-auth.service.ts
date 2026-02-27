@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { CryptoUtil } from '../utils/crypto.util';
 import { ActivityLogsService } from './activity-logs.service';
@@ -18,12 +19,15 @@ export class TenantAuthService {
   }) {
     const { email, password, ipAddress, userAgent } = credentials;
 
-    // Find tenant by email
-    const tenant = await prisma.tenant.findUnique({
-      where: { email }
+    // Find tenant auth by email
+    const tenantAuth = await prisma.tenantAuth.findUnique({
+      where: { email },
+      include: {
+        tenant: true
+      }
     });
 
-    if (!tenant) {
+    if (!tenantAuth || !tenantAuth.tenant) {
       await activityLogsService.createLog({
         action: 'tenant_login',
         module: 'TenantAuth',
@@ -37,6 +41,8 @@ export class TenantAuthService {
       error.statusCode = 401;
       throw error;
     }
+
+    const tenant = tenantAuth.tenant;
 
     // Check if tenant is active
     if (tenant.status !== 'ACTIVE') {
@@ -55,8 +61,16 @@ export class TenantAuthService {
       throw error;
     }
 
-    // Verify password (plain text comparison)
-    const isPasswordValid = password === tenant.password;
+    // Verify password with bcrypt
+    let isPasswordValid: boolean;
+    try {
+      isPasswordValid = await bcrypt.compare(password, tenantAuth.password);
+    } catch (compareError: any) {
+      console.error('❌ [TenantAuthService] Password comparison error:', compareError.message);
+      const error: any = new Error('Authentication failed');
+      error.statusCode = 500;
+      throw error;
+    }
 
     if (!isPasswordValid) {
       await activityLogsService.createLog({
@@ -215,18 +229,28 @@ export class TenantAuthService {
     oldPassword: string,
     newPassword: string
   ) {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId }
+    // Find tenant auth by tenantId
+    const tenantAuth = await prisma.tenantAuth.findFirst({
+      where: { tenantId: tenantId },
+      include: { tenant: true }
     });
 
-    if (!tenant) {
+    if (!tenantAuth || !tenantAuth.tenant) {
       const error: any = new Error('Tenant not found');
       error.statusCode = 404;
       throw error;
     }
 
-    // Verify old password (plain text comparison)
-    const isPasswordValid = oldPassword === tenant.password;
+    // Verify old password with bcrypt
+    let isPasswordValid: boolean;
+    try {
+      isPasswordValid = await bcrypt.compare(oldPassword, tenantAuth.password);
+    } catch (compareError: any) {
+      console.error('❌ [TenantAuthService] Password comparison error:', compareError.message);
+      const error: any = new Error('Password verification failed');
+      error.statusCode = 500;
+      throw error;
+    }
 
     if (!isPasswordValid) {
       const error: any = new Error('Current password is incorrect');
@@ -234,16 +258,27 @@ export class TenantAuthService {
       throw error;
     }
 
-    // Update password (plain text - no hashing)
-    await prisma.tenant.update({
-      where: { id: tenantId },
+    // Hash new password with bcrypt
+    let hashedPassword: string;
+    try {
+      hashedPassword = await bcrypt.hash(newPassword, 10);
+    } catch (hashError: any) {
+      console.error('❌ [TenantAuthService] Password hashing error:', hashError.message);
+      const error: any = new Error('Failed to hash new password');
+      error.statusCode = 500;
+      throw error;
+    }
+
+    // Update password in TenantAuth table
+    await prisma.tenantAuth.update({
+      where: { id: tenantAuth.id },
       data: {
-        password: newPassword
+        password: hashedPassword
       }
     });
 
     await activityLogsService.createLog({
-      tenantId,
+      tenantId: tenantAuth.tenant.id,
       action: 'change_password',
       module: 'TenantAuth',
       description: `Tenant changed password`,

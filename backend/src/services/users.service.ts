@@ -88,12 +88,15 @@ export class UsersService {
     // Generate temporary password if not provided
     const temporaryPassword = data.password || emailService.generateTemporaryPassword();
     
-    // Create user (plain text password - no hashing)
+    // Store password as plain text (for Lucky Draw system compatibility)
+    const plainPassword = temporaryPassword;
+
+    // Create user
     const user = await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
-        password: temporaryPassword,
+        password: plainPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -242,13 +245,19 @@ export class UsersService {
       }
     }
 
-    // Update user (plain text password - no hashing)
+    // Store password as plain text if provided (for Lucky Draw system compatibility)
+    let plainPassword;
+    if (data.password) {
+      plainPassword = data.password;
+    }
+
+    // Update user
     const updated = await prisma.user.update({
       where: { id },
       data: {
         name: data.name,
         email: data.email,
-        password: data.password,
+        password: plainPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -383,14 +392,15 @@ export class UsersService {
       throw error;
     }
 
-    // Generate new temporary password (plain text - no hashing)
+    // Generate new temporary password
     const temporaryPassword = emailService.generateTemporaryPassword();
+    const plainPassword = temporaryPassword;
 
     // Update user with new password and reset flags
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: temporaryPassword,
+        password: plainPassword,
         lastLoginAt: new Date()
       }
     });
@@ -441,19 +451,21 @@ export class UsersService {
       throw error;
     }
 
-    // Verify old password
-    const isPasswordValid = oldPassword === user.password;
-    if (!isPasswordValid) {
+    // Verify old password (plain text comparison)
+    if (oldPassword !== user.password) {
       const error: any = new Error('Current password is incorrect');
       error.statusCode = 400;
       throw error;
     }
 
-    // Update password (plain text - no hashing)
+    // Store new password as plain text (for Lucky Draw system compatibility)
+    const plainPassword = newPassword;
+
+    // Update password and reset flags
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: newPassword,
+        password: plainPassword,
         lastLoginAt: new Date()
       }
     });

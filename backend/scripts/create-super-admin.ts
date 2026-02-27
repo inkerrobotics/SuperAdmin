@@ -17,11 +17,14 @@ async function createSuperAdmin() {
       return;
     }
 
-    // Create super admin (plain text password - no hashing)
+    // Store password as plain text (for Lucky Draw system compatibility)
+    const plainPassword = password;
+
+    // Create super admin
     const superAdmin = await prisma.user.create({
       data: {
         email,
-        password: password,  // Plain text password
+        password: plainPassword,
         role: Role.ADMIN,
         name: 'Super Admin'
       }

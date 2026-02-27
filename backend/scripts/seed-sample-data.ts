@@ -39,12 +39,12 @@ async function seedData() {
         data: tenantData
       });
 
-      // Create admin user for each tenant
-      const hashedPassword = await bcrypt.hash('password123', 10);
+      // Create admin user for each tenant (plain text password for Lucky Draw system)
+      const plainPassword = 'password123';
       await prisma.user.create({
         data: {
           email: `admin@${tenantData.email.split('@')[1]}`,
-          password: hashedPassword,
+          password: plainPassword,
           role: Role.TENANT_ADMIN,
           tenantId: tenant.id
         }
