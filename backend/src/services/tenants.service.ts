@@ -1,4 +1,5 @@
 import { PrismaClient, TenantStatus } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { ActivityLogsService } from './activity-logs.service';
 import { CryptoUtil } from '../utils/crypto.util';
 
@@ -6,6 +7,62 @@ const prisma = new PrismaClient();
 const activityLogsService = new ActivityLogsService();
 
 export class TenantsService {
+  /**
+   * Transform Lucky Draw permissions format to database format
+   * Lucky Draw format: { dashboard: ['read', 'write'], contests: ['read'] }
+   * Database format: [{ module: 'dashboard', canView: true, canCreate: true, canEdit: false, canDelete: false }]
+   */
+  private transformPermissionsToDatabase(luckyDrawPermissions: Record<string, ('read' | 'write' | 'update')[]>) {
+    console.log('🔄 [TenantsService] Transforming Lucky Draw permissions to database format');
+    
+    const dbPermissions = Object.entries(luckyDrawPermissions).map(([module, perms]) => {
+      const hasRead = perms.includes('read');
+      const hasWrite = perms.includes('write');
+      const hasUpdate = perms.includes('update');
+      
+      return {
+        module,
+        canView: hasRead,
+        canCreate: hasWrite,
+        canEdit: hasUpdate,
+        canDelete: hasUpdate  // Update permission also allows delete
+      };
+    });
+    
+    console.log(`✅ [TenantsService] Transformed ${dbPermissions.length} permission entries`);
+    return dbPermissions;
+  }
+
+  /**
+   * Transform database permissions format to Lucky Draw format
+   * Database format: [{ module: 'dashboard', canView: true, canCreate: true, canEdit: false, canDelete: false }]
+   * Lucky Draw format: { dashboard: ['read', 'write'], contests: ['read'] }
+   */
+  private transformPermissionsToLuckyDraw(dbPermissions: Array<{
+    module: string;
+    canView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+  }>) {
+    console.log('🔄 [TenantsService] Transforming database permissions to Lucky Draw format');
+    
+    const luckyDrawPermissions: Record<string, ('read' | 'write' | 'update')[]> = {};
+    
+    dbPermissions.forEach(perm => {
+      const perms: ('read' | 'write' | 'update')[] = [];
+      
+      if (perm.canView) perms.push('read');
+      if (perm.canCreate) perms.push('write');
+      if (perm.canEdit || perm.canDelete) perms.push('update');
+      
+      luckyDrawPermissions[perm.module] = perms;
+    });
+    
+    console.log(`✅ [TenantsService] Transformed to Lucky Draw format with ${Object.keys(luckyDrawPermissions).length} modules`);
+    return luckyDrawPermissions;
+  }
+
   /**
    * Get all tenants with filters
    */
@@ -43,7 +100,6 @@ export class TenantsService {
           id: true,
           tenantId: true,
           name: true,
-          email: true,
           status: true,
           subscriptionPlan: true,
           organizationLogo: true,
@@ -53,6 +109,11 @@ export class TenantsService {
           lastLoginAt: true,
           createdAt: true,
           updatedAt: true,
+          auth: {
+            select: {
+              email: true
+            }
+          },
           users: {
             select: {
               id: true,
@@ -98,7 +159,11 @@ export class TenantsService {
     const tenant = await prisma.tenant.findUnique({
       where: { id },
       include: {
-        permissions: true,
+        auth: {
+          include: {
+            permissions: true
+          }
+        },
         users: {
           select: {
             id: true,
@@ -132,19 +197,26 @@ export class TenantsService {
 
     console.log(`✅ [TenantsService] Found tenant: ${tenant.name} (${tenant.tenantId})`);
 
-    // Don't return encrypted credentials in detail view
+    // Transform permissions to Lucky Draw format
+    const luckyDrawPermissions = tenant.auth?.permissions 
+      ? this.transformPermissionsToLuckyDraw(tenant.auth.permissions)
+      : {};
+
+    // Don't return encrypted credentials and password in detail view
     const { 
       whatsappPhoneNumberId, 
       whatsappAccessToken, 
       whatsappBusinessId, 
       whatsappWebhookSecret, 
       whatsappVerifyToken,
-      password,
+      auth,
       ...tenantData 
     } = tenant;
 
     return {
       ...tenantData,
+      email: auth?.email,
+      permissions: luckyDrawPermissions,  // Return in Lucky Draw format
       whatsappConfigured: !!(whatsappPhoneNumberId && whatsappAccessToken)
     };
   }
@@ -184,19 +256,13 @@ export class TenantsService {
     whatsappWebhookSecret?: string;
     whatsappVerifyToken?: string;
     
-    // Permissions
-    permissions?: Array<{
-      module: string;
-      canView: boolean;
-      canCreate: boolean;
-      canEdit: boolean;
-      canDelete: boolean;
-    }>;
+    // Permissions in Lucky Draw format
+    permissions?: Record<string, ('read' | 'write' | 'update')[]>;
   }, createdBy?: string) {
     console.log('🆕 [TenantsService] Creating new tenant:', { name: data.name, email: data.email });
     
-    // Check if email already exists
-    const existing = await prisma.tenant.findUnique({
+    // Check if email already exists in TenantAuth
+    const existing = await prisma.tenantAuth.findUnique({
       where: { email: data.email }
     });
 
@@ -219,17 +285,25 @@ export class TenantsService {
     const tenantId = CryptoUtil.generateTenantId();
     console.log(`🔑 [TenantsService] Generated tenant ID: ${tenantId}`);
 
-    // DON'T hash password - send plain text to Lucky Draw backend
-    // Lucky Draw backend will hash it with SHA-256
-    const plainPassword = data.password;
-    console.log('🔐 [TenantsService] Password stored as plain text (will be hashed by Lucky Draw backend with SHA-256)');
+    // Hash password with bcrypt (10 salt rounds)
+    let hashedPassword: string;
+    try {
+      hashedPassword = await bcrypt.hash(data.password, 10);
+      console.log('🔐 [TenantsService] Password hashed successfully with bcrypt');
+    } catch (hashError: any) {
+      console.log('❌ [TenantsService] Password hashing failed:', hashError.message);
+      const error: any = new Error('Failed to hash password');
+      error.statusCode = 500;
+      throw error;
+    }
 
-    // Prepare tenant data
+    // Transform Lucky Draw permissions to database format
+    const dbPermissions = data.permissions ? this.transformPermissionsToDatabase(data.permissions) : [];
+
+    // Prepare tenant details data
     const tenantData: any = {
       tenantId,
       name: data.name,
-      email: data.email,
-      password: plainPassword,  // Plain text password for Lucky Draw backend
       subscriptionPlan: data.subscriptionPlan || 'Basic',
       status: 'PENDING' as TenantStatus,
       
@@ -277,19 +351,29 @@ export class TenantsService {
 
     console.log('💾 [TenantsService] Creating tenant in database...');
 
-    // Create tenant with permissions in a transaction
-    const tenant = await prisma.$transaction(async (tx) => {
+    // Create tenant with auth and permissions in a transaction
+    const result = await prisma.$transaction(async (tx: any) => {
+      // 1. Create Tenant (details)
       const newTenant = await tx.tenant.create({
         data: tenantData
       });
+      console.log(`✅ [TenantsService] Tenant details created: ${newTenant.id}`);
 
-      console.log(`✅ [TenantsService] Tenant created in database: ${newTenant.id}`);
+      // 2. Create TenantAuth (login credentials with hashed password)
+      const newAuth = await tx.tenantAuth.create({
+        data: {
+          tenantId: tenantId,
+          email: data.email,
+          password: hashedPassword  // Store hashed password
+        }
+      });
+      console.log(`✅ [TenantsService] Tenant auth created with hashed password: ${newAuth.id}`);
 
-      // Create permissions if provided
-      if (data.permissions && data.permissions.length > 0) {
+      // 3. Create permissions if provided
+      if (dbPermissions && dbPermissions.length > 0) {
         await tx.tenantPermission.createMany({
-          data: data.permissions.map(perm => ({
-            tenantId: newTenant.id,
+          data: dbPermissions.map(perm => ({
+            authId: newAuth.id,
             module: perm.module,
             canView: perm.canView,
             canCreate: perm.canCreate,
@@ -297,32 +381,36 @@ export class TenantsService {
             canDelete: perm.canDelete
           }))
         });
-        console.log(`🔐 [TenantsService] Created ${data.permissions.length} permission entries`);
+        console.log(`🔐 [TenantsService] Created ${dbPermissions.length} permission entries`);
       }
 
-      return newTenant;
+      return { tenant: newTenant, auth: newAuth };
     });
 
-    // Log activity
+    // Log activity (non-blocking)
     if (createdBy) {
-      await activityLogsService.createLog({
-        userId: createdBy,
-        tenantId: tenant.id,
-        action: 'create_tenant',
-        module: 'Tenants',
-        description: `Created new tenant: ${tenant.name} (${tenantId})`,
-        status: 'success'
-      });
-      console.log('📝 [TenantsService] Activity log created');
+      try {
+        await activityLogsService.createLog({
+          userId: createdBy,
+          tenantId: result.tenant.id,
+          action: 'create_tenant',
+          module: 'Tenants',
+          description: `Created new tenant: ${result.tenant.name} (${tenantId})`,
+          status: 'success'
+        });
+        console.log('📝 [TenantsService] Activity log created');
+      } catch (logError: any) {
+        console.log('⚠️ [TenantsService] Failed to create activity log:', logError.message);
+      }
     }
 
-    console.log(`🎉 [TenantsService] Tenant creation completed successfully: ${tenant.name} (${tenantId})`);
+    console.log(`🎉 [TenantsService] Tenant creation completed successfully: ${result.tenant.name} (${tenantId})`);
 
     return {
-      id: tenant.id,
+      id: result.tenant.id,
       tenantId: tenantId,
-      name: tenant.name,
-      status: tenant.status,
+      name: result.tenant.name,
+      status: result.tenant.status,
       message: 'Client created successfully'
     };
   }
@@ -354,7 +442,7 @@ export class TenantsService {
     const oldStatus = tenant.status;
     console.log(`📊 [TenantsService] Status change: ${oldStatus} -> ${newStatus}`);
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       const updatedTenant = await tx.tenant.update({
         where: { id: tenantId },
         data: { status: newStatus }
@@ -470,11 +558,24 @@ export class TenantsService {
     tenantId: string,
     data: {
       password?: string;
+      email?: string;
     },
     updatedBy?: string
   ) {
     console.log(`🔐 [TenantsService] Updating credentials for tenant: ${tenantId}`);
     
+    // Find the tenant auth by tenantId
+    const auth = await prisma.tenantAuth.findUnique({
+      where: { tenantId }
+    });
+
+    if (!auth) {
+      console.log(`❌ [TenantsService] Tenant auth not found: ${tenantId}`);
+      const error: any = new Error('Tenant not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
     const updateData: any = {};
 
     if (data.password) {
@@ -484,21 +585,33 @@ export class TenantsService {
       console.log('🔑 [TenantsService] Password updated (plain text for Lucky Draw backend)');
     }
 
-    await prisma.tenant.update({
-      where: { id: tenantId },
+    if (data.email) {
+      updateData.email = data.email;
+      console.log('� [TenantsService] Email updated');
+    }
+
+    await prisma.tenantAuth.update({
+      where: { id: auth.id },
       data: updateData
     });
 
     if (updatedBy) {
-      await activityLogsService.createLog({
-        userId: updatedBy,
-        tenantId,
-        action: 'update_tenant_credentials',
-        module: 'Tenants',
-        description: `Updated credentials for tenant`,
-        status: 'success'
+      // Find tenant by tenantId for activity log
+      const tenant = await prisma.tenant.findUnique({
+        where: { tenantId }
       });
-      console.log('📝 [TenantsService] Activity log created');
+
+      if (tenant) {
+        await activityLogsService.createLog({
+          userId: updatedBy,
+          tenantId: tenant.id,
+          action: 'update_tenant_credentials',
+          module: 'Tenants',
+          description: `Updated credentials for tenant`,
+          status: 'success'
+        });
+        console.log('📝 [TenantsService] Activity log created');
+      }
     }
 
     console.log(`✅ [TenantsService] Tenant credentials updated successfully`);

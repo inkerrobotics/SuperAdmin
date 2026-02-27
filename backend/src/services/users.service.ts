@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 import { ActivityLogsService } from './activity-logs.service';
 import { EmailService } from './email.service';
 
@@ -89,15 +88,15 @@ export class UsersService {
     // Generate temporary password if not provided
     const temporaryPassword = data.password || emailService.generateTemporaryPassword();
     
-    // Hash password
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    // Store password as plain text (for Lucky Draw system compatibility)
+    const plainPassword = temporaryPassword;
 
     // Create user
     const user = await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
-        password: hashedPassword,
+        password: plainPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -246,10 +245,10 @@ export class UsersService {
       }
     }
 
-    // Hash password if provided
-    let hashedPassword;
+    // Store password as plain text if provided (for Lucky Draw system compatibility)
+    let plainPassword;
     if (data.password) {
-      hashedPassword = await bcrypt.hash(data.password, 10);
+      plainPassword = data.password;
     }
 
     // Update user
@@ -258,7 +257,7 @@ export class UsersService {
       data: {
         name: data.name,
         email: data.email,
-        password: hashedPassword,
+        password: plainPassword,
         role: data.role as any,
         customRoleId: data.customRoleId,
         tenantId: data.tenantId
@@ -395,13 +394,13 @@ export class UsersService {
 
     // Generate new temporary password
     const temporaryPassword = emailService.generateTemporaryPassword();
-    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    const plainPassword = temporaryPassword;
 
     // Update user with new password and reset flags
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword,
+        password: plainPassword,
         lastLoginAt: new Date()
       }
     });
@@ -452,22 +451,21 @@ export class UsersService {
       throw error;
     }
 
-    // Verify old password
-    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
-    if (!isPasswordValid) {
+    // Verify old password (plain text comparison)
+    if (oldPassword !== user.password) {
       const error: any = new Error('Current password is incorrect');
       error.statusCode = 400;
       throw error;
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Store new password as plain text (for Lucky Draw system compatibility)
+    const plainPassword = newPassword;
 
     // Update password and reset flags
     await prisma.user.update({
       where: { id: userId },
       data: {
-        password: hashedPassword,
+        password: plainPassword,
         lastLoginAt: new Date()
       }
     });

@@ -1,4 +1,3 @@
-import bcrypt from 'bcrypt';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient, Role } from '@prisma/client';
 import { ActivityLogsService } from './activity-logs.service';
@@ -45,8 +44,8 @@ export class AuthService {
       throw error;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    // Plain text password comparison (passwords stored as plain text for Lucky Draw system)
+    if (password !== user.password) {
       // Log failed login attempt
       await activityLogsService.createLog({
         userId: user.id,
@@ -138,8 +137,8 @@ export class AuthService {
       throw error;
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
+    // Plain text password comparison (passwords stored as plain text for Lucky Draw system)
+    if (password !== user.password) {
       // Log failed login attempt
       await activityLogsService.createLog({
         userId: user.id,

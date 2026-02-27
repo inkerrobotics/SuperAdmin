@@ -54,37 +54,40 @@ export default function CreateTenant() {
     whatsappVerifyToken: ''
   });
 
-  // Lucky Draw Permissions
+  // Lucky Draw Permissions (matching Lucky Draw system structure)
   const luckyDrawModules = [
-    'Campaigns',
-    'Participants',
-    'Winners',
-    'Draw Management',
-    'Reports & Analytics',
-    'Settings'
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'contests', label: 'Contests' },
+    { key: 'participants', label: 'Participants' },
+    { key: 'draw', label: 'Draw' },
+    { key: 'winners', label: 'Winners' },
+    { key: 'communication', label: 'Communication' },
+    { key: 'analytics', label: 'Analytics' },
+    { key: 'settings', label: 'Settings' },
+    { key: 'user_management', label: 'User Management' }
   ];
 
-  const [permissions, setPermissions] = useState<Record<string, {
-    canView: boolean;
-    canCreate: boolean;
-    canEdit: boolean;
-    canDelete: boolean;
-  }>>(() => {
+  const [permissions, setPermissions] = useState<Record<string, ('read' | 'write' | 'update')[]>>(() => {
     const initial: any = {};
     luckyDrawModules.forEach(module => {
-      initial[module] = { canView: true, canCreate: true, canEdit: true, canDelete: true };
+      // Dashboard has read permission by default, others are empty
+      initial[module.key] = module.key === 'dashboard' ? ['read'] : [];
     });
     return initial;
   });
 
-  const handlePermissionToggle = (module: string, permission: 'canView' | 'canCreate' | 'canEdit' | 'canDelete') => {
-    setPermissions(prev => ({
-      ...prev,
-      [module]: {
-        ...prev[module],
-        [permission]: !prev[module][permission]
-      }
-    }));
+  const handlePermissionToggle = (moduleKey: string, permission: 'read' | 'write' | 'update') => {
+    setPermissions(prev => {
+      const currentPerms = prev[moduleKey] || [];
+      const hasPermission = currentPerms.includes(permission);
+      
+      return {
+        ...prev,
+        [moduleKey]: hasPermission
+          ? currentPerms.filter(p => p !== permission)
+          : [...currentPerms, permission]
+      };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,10 +119,7 @@ export default function CreateTenant() {
 
       const payload: any = {
         ...clientData,
-        permissions: Object.entries(permissions).map(([module, perms]) => ({
-          module,
-          ...perms
-        }))
+        permissions: permissions // Send permissions object directly in Lucky Draw format
       };
 
       const result = await tenantsService.createTenant(payload);
@@ -488,52 +488,59 @@ export default function CreateTenant() {
               {activeTab === 'permissions' && (
                 <div className="space-y-6 animate-fadeIn">
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">Lucky Draw Permissions</h2>
-                  <p className="text-sm text-gray-600 mb-4">Configure module-level permissions for this client</p>
+                  <p className="text-sm text-gray-600 mb-4">Configure module-level permissions for this client (read, write, update)</p>
                   
                   <div className="space-y-4">
                     {luckyDrawModules.map((module) => (
-                      <div key={module} className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="font-medium text-gray-900 mb-3">{module}</h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div key={module.key} className="border border-gray-200 rounded-lg p-4">
+                        <h3 className="font-medium text-gray-900 mb-3">{module.label}</h3>
+                        <div className="grid grid-cols-3 gap-4">
                           <label className="flex items-center space-x-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={permissions[module]?.canView}
-                              onChange={() => handlePermissionToggle(module, 'canView')}
+                              checked={permissions[module.key]?.includes('read')}
+                              onChange={() => handlePermissionToggle(module.key, 'read')}
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                             />
-                            <span className="text-sm text-gray-700">View</span>
+                            <span className="text-sm text-gray-700">Read</span>
                           </label>
                           <label className="flex items-center space-x-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={permissions[module]?.canCreate}
-                              onChange={() => handlePermissionToggle(module, 'canCreate')}
+                              checked={permissions[module.key]?.includes('write')}
+                              onChange={() => handlePermissionToggle(module.key, 'write')}
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                             />
-                            <span className="text-sm text-gray-700">Create</span>
+                            <span className="text-sm text-gray-700">Write</span>
                           </label>
                           <label className="flex items-center space-x-2 cursor-pointer">
                             <input
                               type="checkbox"
-                              checked={permissions[module]?.canEdit}
-                              onChange={() => handlePermissionToggle(module, 'canEdit')}
+                              checked={permissions[module.key]?.includes('update')}
+                              onChange={() => handlePermissionToggle(module.key, 'update')}
                               className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                             />
-                            <span className="text-sm text-gray-700">Edit</span>
-                          </label>
-                          <label className="flex items-center space-x-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={permissions[module]?.canDelete}
-                              onChange={() => handlePermissionToggle(module, 'canDelete')}
-                              className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                            />
-                            <span className="text-sm text-gray-700">Delete</span>
+                            <span className="text-sm text-gray-700">Update</span>
                           </label>
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-start">
+                      <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <h4 className="text-sm font-medium text-blue-900">Permission Types</h4>
+                        <ul className="text-sm text-blue-700 mt-1 space-y-1">
+                          <li><strong>Read:</strong> View and access module data</li>
+                          <li><strong>Write:</strong> Create new entries in the module</li>
+                          <li><strong>Update:</strong> Modify existing entries in the module</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
