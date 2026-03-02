@@ -58,3 +58,11 @@ backend/prisma/migrations/**/migration.sql.bak
 # Misc
 .turbo/
 .vercel/
+
+# Test and temporary files
+test-*.js
+check-*.js
+migrate-*.js
+*-test.js
+*.test.backup
+backups/
