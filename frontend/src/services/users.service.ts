@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/users';
+const API_URL = '/api/users';
 
 export interface User {
   id: string;

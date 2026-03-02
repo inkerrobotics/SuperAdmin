@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/activity-logs';
+const API_URL = '/api/activity-logs';
 
 export interface ActivityLog {
   id: string;

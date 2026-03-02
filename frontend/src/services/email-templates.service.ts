@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/email-templates';
+const API_URL = '/api/email-templates';
 
 export interface EmailTemplate {
   id: string;

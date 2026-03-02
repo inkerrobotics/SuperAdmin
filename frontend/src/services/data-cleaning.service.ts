@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/data-cleaning';
+const API_URL = '/api/data-cleaning';
 
 class DataCleaningService {
   async getStats() {

@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/notifications';
+const API_URL = '/api/notifications';
 
 export interface NotificationTemplate {
   id: string;

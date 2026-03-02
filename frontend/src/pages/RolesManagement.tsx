@@ -2,14 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { rolesService, Role } from '../services/roles.service';
-import { usersService, User } from '../services/users.service';
+import { usersService } from '../services/users.service';
 import Toast from '../components/Toast';
 
 export default function RolesManagement() {
   const navigate = useNavigate();
   const [roles, setRoles] = useState<Role[]>([]);
-  const [modules, setModules] = useState<string[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTenantModal, setShowTenantModal] = useState(false);
   const [error, setError] = useState('');
@@ -88,14 +86,12 @@ export default function RolesManagement() {
 
   const fetchData = async () => {
     try {
-      const [rolesData, modulesData, usersData] = await Promise.all([
+      const [rolesData] = await Promise.all([
         rolesService.getAllRoles(),
         rolesService.getAvailableModules(),
         usersService.getAllUsers()
       ]);
       setRoles(rolesData);
-      setModules(modulesData);
-      setUsers(usersData);
     } catch (err: any) {
       if (err.message.includes('Unauthorized')) {
         navigate('/login');
@@ -259,7 +255,7 @@ export default function RolesManagement() {
         canDelete: perms.canDelete
       }));
 
-      const response = await fetch('http://localhost:5001/api/tenants/create', {
+      const response = await fetch('/api/tenants/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

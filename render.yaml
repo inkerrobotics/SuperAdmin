@@ -1,13 +1,11 @@
 services:
-  # Backend Service
   - type: web
-    name: super-admin-backend
-    env: node
-    region: singapore
+    name: super-admin-dashboard
+    runtime: docker
     plan: starter
-    rootDir: backend
-    buildCommand: npm install && npx prisma generate && npm run build
-    startCommand: npx prisma migrate deploy && npm start
+    region: singapore
+    branch: main
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,41 +15,15 @@ services:
         fromDatabase:
           name: super-admin-db
           property: connectionString
-      - key: DIRECT_URL
-        fromDatabase:
-          name: super-admin-db
-          property: connectionString
       - key: JWT_SECRET
         generateValue: true
-      - key: JWT_EXPIRES_IN
-        value: 24h
       - key: ENCRYPTION_KEY
         generateValue: true
-      - key: FRONTEND_URL
-        value: https://super-admin-frontend.onrender.com
     healthCheckPath: /api/health
 
-  # Frontend Service
-  - type: web
-    name: super-admin-frontend
-    env: static
-    region: singapore
-    plan: starter
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        value: https://super-admin-backend.onrender.com
-
-# Database
 databases:
   - name: super-admin-db
-    databaseName: super_admin
+    databaseName: super_admin_dashboard
     user: super_admin_user
-    plan: starter
     region: singapore
+    plan: starter

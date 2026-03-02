@@ -29,10 +29,10 @@ export default function Analytics() {
         setLoading(true);
       }
       const [statsData, healthData] = await Promise.all([
-        fetch(`http://localhost:5001/api/analytics?period=${selectedPeriod}`, {
+        fetch(`/api/analytics?period=${selectedPeriod}`, {
           credentials: 'include'
         }).then(res => res.json()),
-        fetch('http://localhost:5001/api/analytics/health', {
+        fetch('/api/analytics/health', {
           credentials: 'include'
         }).then(res => res.json())
       ]);

@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/settings';
+const API_URL = '/api/settings';
 
 export interface Setting {
   key: string;

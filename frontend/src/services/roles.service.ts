@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/roles';
+const API_URL = '/api/roles';
 
 export interface Permission {
   id?: string;

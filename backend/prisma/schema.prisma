@@ -8,35 +8,29 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ============================================
-// SUPER ADMIN SYSTEM MODELS
-// ============================================
-
 model User {
-  id                   String                 @id @default(uuid())
-  name                 String?
-  email                String                 @unique
-  password             String
-  role                 Role
-  tenantId             String?
-  tenant               Tenant?                @relation(fields: [tenantId], references: [id])
-  customRoleId         String?
-  customRole           CustomRole?            @relation(fields: [customRoleId], references: [id])
-  lastLoginAt          DateTime?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-  
-  // Relations
-  systemSettings       SystemSetting[]
-  settingHistory       SettingHistory[]
-  emailTemplates       EmailTemplate[]
-  activityLogs         ActivityLog[]
-  backups              Backup[]
-  notifications        Notification[]
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  password              String
+  role                  Role
+  tenantId              String?
+  createdAt             DateTime               @default(now())
+  customRoleId          String?
+  name                  String?
+  lastLoginAt           DateTime?
+  updatedAt             DateTime               @updatedAt
+  activityLogs          ActivityLog[]
+  backups               Backup[]
+  emailLogs             EmailLog[]
+  emailTemplates        EmailTemplate[]
+  notifications         Notification[]
   notificationTemplates NotificationTemplate[]
-  emailLogs            EmailLog[]
-  sessions             Session[]
-  
+  sessions              Session[]
+  settingHistory        SettingHistory[]
+  systemSettings        SystemSetting[]
+  customRole            CustomRole?            @relation(fields: [customRoleId], references: [id])
+  tenant                Tenant?                @relation(fields: [tenantId], references: [id])
+
   @@index([email])
   @@index([role])
   @@index([tenantId])
@@ -44,90 +38,68 @@ model User {
 
 model Tenant {
   id                         String                   @id @default(uuid())
-  tenantId                   String                   @unique
   name                       String
   status                     TenantStatus             @default(PENDING)
   subscriptionPlan           String?
-  
-  // Organization Details
-  organizationLogo           String?
-  businessCategory           String?
-  displayName                String?
-  brandColor                 String?                  @default("#6366f1")
-  
-  // Admin Contact
-  adminFullName              String?
-  adminMobileNumber          String?
-  adminDesignation           String?
-  
-  // Operational Settings
-  timezone                   String?                  @default("Asia/Kolkata")
-  country                    String?                  @default("India")
-  region                     String?
-  drawFrequency              String?                  @default("monthly")
-  
-  // Compliance
-  businessVerificationStatus String?                  @default("pending")
-  dataUsageConsent           Boolean                  @default(false)
-  dataPrivacyAcknowledged    Boolean                  @default(false)
-  
-  // Support Contacts
-  primaryContactPerson       String?
-  supportContactEmail        String?
-  escalationContact          String?
-  
-  // WhatsApp Integration (Encrypted with AES-256-CBC)
-  whatsappPhoneNumberId      String?
-  whatsappAccessToken        String?
-  whatsappBusinessId         String?
-  whatsappWebhookSecret      String?
-  whatsappVerifyToken        String?
-  
-  // Timestamps
-  lastLoginAt                DateTime?
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
-  
-  // Relations
-  auth                       TenantAuth?
-  users                      User[]
+  lastLoginAt                DateTime?
+  tenantId                   String                   @unique
+  whatsappAccessToken        String?
+  whatsappBusinessId         String?
+  whatsappPhoneNumberId      String?
+  whatsappVerifyToken        String?
+  whatsappWebhookSecret      String?
+  adminDesignation           String?
+  adminFullName              String?
+  adminMobileNumber          String?
+  brandColor                 String?                  @default("#6366f1")
+  businessCategory           String?
+  businessVerificationStatus String?                  @default("pending")
+  country                    String?                  @default("India")
+  dataPrivacyAcknowledged    Boolean                  @default(false)
+  dataUsageConsent           Boolean                  @default(false)
+  displayName                String?
+  drawFrequency              String?                  @default("monthly")
+  escalationContact          String?
+  organizationLogo           String?
+  primaryContactPerson       String?
+  region                     String?
+  supportContactEmail        String?
+  timezone                   String?                  @default("Asia/Kolkata")
   activityLogs               ActivityLog[]
+  auth                       TenantAuth?
   statusHistory              TenantStatusHistory[]
-  
-  // Lucky Draw System Relations
+  users                      User[]
   adminActivityLogs          admin_activity_log[]     @relation("TenantActivityLog")
-  contests                   contests[]               @relation("TenantContests")
-  draws                      draws[]                  @relation("TenantDraws")
-  monthlyDrawHistory         monthly_draw_history[]   @relation("TenantMonthlyDraws")
-  messages                   messages[]               @relation("TenantMessages")
   blockAllocations           block_allocation_audit[] @relation("TenantBlockAllocations")
   cardAllocations            card_allocation_audit[]  @relation("TenantCardAllocations")
-  
+  contests                   contests[]               @relation("TenantContests")
+  draws                      draws[]                  @relation("TenantDraws")
+  messages                   messages[]               @relation("TenantMessages")
+  monthlyDrawHistory         monthly_draw_history[]   @relation("TenantMonthlyDraws")
+
   @@index([tenantId])
   @@index([status])
   @@index([businessVerificationStatus])
 }
 
 model TenantAuth {
-  id        String             @id @default(uuid())
-  tenantId  String             @unique
-  email     String             @unique
-  password  String
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  
-  // Relations
+  id          String             @id @default(uuid())
+  tenantId    String             @unique
+  email       String             @unique
+  password    String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   tenant      Tenant             @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
   permissions TenantPermission[]
-  
+
   @@index([email])
   @@index([tenantId])
 }
 
 model TenantPermission {
   id        String     @id @default(uuid())
-  authId    String
-  auth      TenantAuth @relation(fields: [authId], references: [id], onDelete: Cascade)
   module    String
   canView   Boolean    @default(true)
   canCreate Boolean    @default(true)
@@ -135,6 +107,8 @@ model TenantPermission {
   canDelete Boolean    @default(true)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  authId    String
+  auth      TenantAuth @relation(fields: [authId], references: [id], onDelete: Cascade)
 
   @@unique([authId, module])
   @@index([authId])
@@ -143,7 +117,6 @@ model TenantPermission {
 model TenantStatusHistory {
   id        String       @id @default(uuid())
   tenantId  String
-  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   oldStatus TenantStatus
   newStatus TenantStatus
   reason    String
@@ -151,6 +124,7 @@ model TenantStatusHistory {
   ipAddress String?
   userAgent String?
   createdAt DateTime     @default(now())
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([createdAt])
@@ -160,17 +134,16 @@ model CustomRole {
   id          String           @id @default(uuid())
   name        String           @unique
   description String?
-  permissions RolePermission[]
-  users       User[]
   isActive    Boolean          @default(true)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+  permissions RolePermission[]
+  users       User[]
 }
 
 model RolePermission {
   id        String     @id @default(uuid())
   roleId    String
-  role      CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
   module    String
   canView   Boolean    @default(false)
   canCreate Boolean    @default(false)
@@ -178,6 +151,7 @@ model RolePermission {
   canDelete Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+  role      CustomRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@unique([roleId, module])
   @@index([roleId])
@@ -190,11 +164,11 @@ model SystemSetting {
   value         String
   dataType      String
   description   String?
-  updatedBy     String
-  updatedByUser User             @relation(fields: [updatedBy], references: [id])
-  createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  updatedBy     String
+  createdAt     DateTime         @default(now())
   history       SettingHistory[]
+  updatedByUser User             @relation(fields: [updatedBy], references: [id])
 
   @@unique([category, key])
   @@index([category])
@@ -203,14 +177,14 @@ model SystemSetting {
 model SettingHistory {
   id            String        @id @default(uuid())
   settingId     String
-  setting       SystemSetting @relation(fields: [settingId], references: [id], onDelete: Cascade)
   oldValue      String
   newValue      String
   changedBy     String
-  changedByUser User          @relation(fields: [changedBy], references: [id])
   changedAt     DateTime      @default(now())
   reason        String?
-  
+  changedByUser User          @relation(fields: [changedBy], references: [id])
+  setting       SystemSetting @relation(fields: [settingId], references: [id], onDelete: Cascade)
+
   @@index([settingId])
   @@index([changedAt])
 }
@@ -224,11 +198,11 @@ model EmailTemplate {
   variables     String
   isActive      Boolean  @default(true)
   version       Int      @default(1)
-  updatedBy     String
-  updatedByUser User     @relation(fields: [updatedBy], references: [id])
-  createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+  updatedBy     String
+  createdAt     DateTime @default(now())
+  updatedByUser User     @relation(fields: [updatedBy], references: [id])
+
   @@index([templateType])
   @@index([isActive])
 }
@@ -236,9 +210,7 @@ model EmailTemplate {
 model ActivityLog {
   id          String   @id @default(uuid())
   userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
   tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
   action      String
   module      String
   description String
@@ -247,6 +219,8 @@ model ActivityLog {
   status      String   @default("success")
   metadata    String?
   createdAt   DateTime @default(now())
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([tenantId])
@@ -266,8 +240,8 @@ model Notification {
   scheduledAt   DateTime?
   sentAt        DateTime?
   createdBy     String
-  createdByUser User      @relation(fields: [createdBy], references: [id])
   createdAt     DateTime  @default(now())
+  createdByUser User      @relation(fields: [createdBy], references: [id])
 
   @@index([targetType, targetId])
   @@index([isRead])
@@ -284,10 +258,10 @@ model NotificationTemplate {
   variables     String
   isActive      Boolean  @default(true)
   createdBy     String
-  createdByUser User     @relation(fields: [createdBy], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
+  createdByUser User     @relation(fields: [createdBy], references: [id])
+
   @@index([name])
   @@index([isActive])
 }
@@ -304,25 +278,25 @@ model Backup {
   completedAt   DateTime?
   error         String?
   createdBy     String
-  createdByUser User      @relation(fields: [createdBy], references: [id])
   createdAt     DateTime  @default(now())
+  createdByUser User      @relation(fields: [createdBy], references: [id])
 
   @@index([status])
   @@index([createdAt])
 }
 
 model EmailLog {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
   recipient String
   subject   String
   body      String
   type      String
-  status    String   @default("pending")
+  status    String    @default("pending")
   error     String?
   sentAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  user      User?     @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -330,23 +304,23 @@ model EmailLog {
 }
 
 model Session {
-  id           String    @id @default(uuid())
-  userId       String
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token        String    @unique
-  deviceName   String?
-  deviceType   String?
-  browser      String?
-  os           String?
-  ipAddress    String?
-  location     String?
-  isActive     Boolean   @default(true)
-  lastActivity DateTime  @default(now())
-  expiresAt    DateTime
-  createdAt    DateTime  @default(now())
-  revokedAt    DateTime?
-  revokedBy    String?
+  id            String    @id @default(uuid())
+  userId        String
+  token         String    @unique
+  deviceName    String?
+  deviceType    String?
+  browser       String?
+  os            String?
+  ipAddress     String?
+  location      String?
+  isActive      Boolean   @default(true)
+  lastActivity  DateTime  @default(now())
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  revokedAt     DateTime?
+  revokedBy     String?
   revokedReason String?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([token])
@@ -354,31 +328,15 @@ model Session {
   @@index([expiresAt])
 }
 
-enum Role {
-  ADMIN
-  USER
-}
-
-enum TenantStatus {
-  ACTIVE
-  INACTIVE
-  PENDING
-  SUSPENDED
-}
-
-// ============================================
-// LUCKY DRAW SYSTEM MODELS
-// ============================================
-
 model admin_activity_log {
   log_id       Int             @id @default(autoincrement())
-  tenant_id    String          @db.VarChar(100)
   action       String
   target_table String          @db.VarChar(100)
   target_id    Int?
   session_id   String?         @db.VarChar(255)
   status       activity_status @default(SUCCESS)
   timestamp    DateTime        @default(now()) @db.Timestamp(6)
+  tenant_id    String          @db.VarChar(100)
   tenant       Tenant          @relation("TenantActivityLog", fields: [tenant_id], references: [id], onDelete: Cascade)
 
   @@index([tenant_id])
@@ -420,9 +378,8 @@ model contests {
   prizes_per_block          Json?                    @default("[]")
   monthly_draw_enabled      Boolean?                 @default(false)
   monthly_draw_date         Int?                     @default(15)
-  monthly_draw_time         DateTime?                @db.Time
+  monthly_draw_time         DateTime?                @db.Time(6)
   tenant_id                 String?                  @db.VarChar(100)
-  
   block_allocation_audits   block_allocation_audit[]
   card_allocation_audits    card_allocation_audit[]
   creator                   Tenant?                  @relation("TenantContests", fields: [created_by], references: [id])
@@ -431,8 +388,8 @@ model contests {
   dependent_contests        contests[]               @relation("PrerequisiteContest")
   draws                     draws[]
   mega_draw_entries         mega_draw_entries[]
-  monthly_draw_history      monthly_draw_history[]
   messages                  messages[]
+  monthly_draw_history      monthly_draw_history[]
   participants              participants[]
   prizes                    prizes[]
   scratch_card_prizes       scratch_card_prizes[]
@@ -480,7 +437,6 @@ model participants {
   monthly_draw_eligible Boolean         @default(true)
   participation_month   DateTime?       @db.Date
   tenant_id             String?         @db.VarChar(100)
-  
   messages              messages[]
   contest               contests        @relation(fields: [contest_id], references: [contest_id], onDelete: Cascade)
   form_response         form_responses? @relation(fields: [form_response_id], references: [response_id])
@@ -495,6 +451,7 @@ model participants {
   @@index([monthly_draw_eligible])
   @@index([participation_month])
   @@index([tenant_id])
+  @@index([whatsapp_id], map: "idx_participants_whatsapp")
 }
 
 model draws {
@@ -535,6 +492,7 @@ model winners {
   @@index([participant_id])
   @@index([draw_type])
   @@index([won_at])
+  @@index([participant_id], map: "idx_winners_participant")
 }
 
 model monthly_draw_history {
@@ -649,6 +607,7 @@ model scratch_participations {
   @@index([whatsapp_id])
   @@index([result])
   @@index([participation_date])
+  @@index([whatsapp_id], map: "idx_scratch_participations_whatsapp")
 }
 
 model mega_draw_entries {
@@ -670,6 +629,8 @@ model mega_draw_entries {
   @@index([whatsapp_id])
   @@index([scratch_participation_id])
   @@index([trigger_word_used])
+  @@index([scratch_participation_id], map: "idx_mega_draw_entries_scratch_participation")
+  @@index([whatsapp_id], map: "idx_mega_draw_entries_whatsapp")
 }
 
 model block_allocation_audit {
@@ -723,9 +684,17 @@ model card_allocation_audit {
   @@index([allocated_by])
 }
 
-// ============================================
-// ENUMS
-// ============================================
+enum Role {
+  ADMIN
+  USER
+}
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
 
 enum activity_status {
   SUCCESS

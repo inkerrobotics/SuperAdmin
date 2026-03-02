@@ -1,341 +1,226 @@
 # Super Admin Dashboard
 
-Multi-tenant SaaS platform for managing Lucky Draw system with separate authentication for Super Admin and Tenants.
+A unified multi-tenant SaaS platform for managing Lucky Draw systems with comprehensive admin controls, tenant management, and analytics.
 
----
+## 🚀 Quick Start (Unified Deployment)
 
-## 🚀 Quick Setup
+The application is now configured as a single service where the backend serves both API endpoints and the frontend static files.
 
+### Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL database
+- npm or yarn
+
+### Environment Setup
+
+1. **Clone and install dependencies:**
 ```bash
-# 1. Install dependencies
-cd backend && npm install
-cd ../frontend && npm install
-
-# 2. Configure environment
+# Install backend dependencies
 cd backend
-cp .env.example .env
-# Edit .env with your database credentials
+npm install
 
-# 3. Apply database schema
-npx prisma db push
-npx prisma generate
-
-# 4. Build and start
-npm run build
-npm run dev  # Backend on port 5001
-
-# 5. Start frontend (new terminal)
+# Install frontend dependencies  
 cd ../frontend
-npm run dev  # Frontend on port 5173
+npm install
+cd ..
 ```
 
----
+2. **Configure environment variables:**
+```bash
+# Copy example environment file
+cp backend/.env.example backend/.env
 
-## 🎯 Two Separate Authentication Systems
-
-### Super Admin Dashboard
-- **URL**: `http://localhost:5173`
-- **Login**: `admin@example.com / Admin@123`
-- **API**: `POST /api/auth/super-admin/login`
-- **Purpose**: Manage platform, create/manage tenants
-
-### Tenant Login (Lucky Draw System)
-- **URL**: Your Lucky Draw frontend
-- **Login**: Credentials created by Super Admin
-- **API**: `POST /api/tenant-auth/login`
-- **Purpose**: Access Lucky Draw features
-
-**⚠️ Important**: Tenant credentials are for Lucky Draw system, NOT Super Admin dashboard!
-
----
-
-## 📊 Database Schema
-
-### Clean and Optimized Structure
-
-The database schema has been cleaned and optimized for performance:
-
-**Super Admin Tables:**
-- `User` - Admin users with role-based access
-- `Tenant` - Client organizations with all details in one table
-- `TenantPermission` - Lucky Draw module permissions per tenant
-- `TenantStatusHistory` - Audit trail for status changes
-- `CustomRole` & `RolePermission` - Custom role management
-- `SystemSetting` & `SettingHistory` - Platform configuration
-- `EmailTemplate` - Email templates with versioning
-- `ActivityLog` - Complete audit trail
-- `Notification` & `NotificationTemplate` - Notification system
-- `Backup` - Backup management
-- `EmailLog` - Email delivery tracking
-- `Session` - User session management
-
-**Lucky Draw Tables:**
-- All Lucky Draw system tables maintained as-is for compatibility
-- Includes: contests, prizes, participants, draws, winners, forms, scratch cards, etc.
-
-### Tenant Model Structure
-```
-Tenant (Single Optimized Table)
-├── Core: id, tenantId, name, email, password, status, subscriptionPlan
-├── Organization: logo, category, displayName, brandColor
-├── Admin Contact: fullName, mobile, designation
-├── Operational: timezone, country, region, drawFrequency
-├── Compliance: verificationStatus, consents
-├── Support: contacts (primary, support, escalation)
-└── WhatsApp: 5 encrypted credential fields (AES-256-CBC)
+# Edit backend/.env with your database credentials:
+DATABASE_URL="postgresql://username:password@host:port/database"
+JWT_SECRET="your-jwt-secret-key"
+ENCRYPTION_KEY="your-32-character-encryption-key"
 ```
 
-**Key Features:**
-- 🔒 WhatsApp credentials encrypted with AES-256-CBC
-- ⚡ Strategic indexes for fast queries
-- 🧹 No redundant fields
-- 📈 Optimized for both Super Admin and Lucky Draw systems
-
----
-
-## 🔐 API Endpoints
-
-### Super Admin
-```
-POST   /api/auth/super-admin/login    - Login
-POST   /api/auth/logout                - Logout
-GET    /api/tenants                    - List tenants
-POST   /api/tenants/create             - Create tenant
-PATCH  /api/tenants/:id/status         - Update status
-```
-
-### Tenant (Lucky Draw)
-```
-POST   /api/tenant-auth/login          - Login
-POST   /api/tenant-auth/logout         - Logout
-GET    /api/tenant-auth/profile        - Get profile
-PATCH  /api/tenant-auth/whatsapp-credentials - Update WhatsApp
-```
-
----
-
-## 🏢 Creating a Tenant
-
-Super Admin creates tenant with comprehensive form:
-1. **Basic**: Name, email, password, subscription
-2. **Organization**: Logo, business category
-3. **Admin Contact**: Full name, mobile, designation
-4. **Branding**: Display name, brand color
-5. **Operational**: Timezone, country, draw frequency
-6. **Permissions**: 6 Lucky Draw modules × 4 levels (View/Create/Edit/Delete)
-7. **WhatsApp**: 5 encrypted credential fields
-8. **Compliance**: Data consent, privacy acknowledgment (required)
-9. **Support**: Primary, support, escalation contacts
-
-**Tenant Status Flow**: PENDING → ACTIVE → INACTIVE/SUSPENDED
-
-Only ACTIVE tenants can login to Lucky Draw system.
-
----
-
-## 🔧 Lucky Draw Frontend Integration
-
-Update your Lucky Draw system to use tenant authentication:
-
-### 1. Change Login Endpoint
-```javascript
-// FROM: POST /api/auth/login
-// TO:   POST /api/tenant-auth/login
-
-const response = await axios.post('/api/tenant-auth/login', {
-  email,
-  password
-});
-```
-
-### 2. Change Token Storage
-```javascript
-// FROM: localStorage.setItem('token', ...)
-// TO:   localStorage.setItem('tenant_token', ...)
-
-localStorage.setItem('tenant_token', response.data.token);
-localStorage.setItem('tenant_info', JSON.stringify(response.data.tenant));
-```
-
-### 3. Update Axios Interceptor
-```javascript
-// FROM: const token = localStorage.getItem('token');
-// TO:   const token = localStorage.getItem('tenant_token');
-
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('tenant_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-```
-
----
-
-## 🧪 Testing
-
+3. **Setup database:**
 ```bash
 cd backend
-
-# Test full tenant login flow
-node test-tenant-login.js
-
-# Test specific credentials
-node test-tenant-auth-quick.js email@example.com password
-
-# Check database users and tenants
-node check-users.js
-```
-
----
-
-## 🐛 Troubleshooting
-
-### 401 Unauthorized in Lucky Draw
-1. Check endpoint: Should be `/api/tenant-auth/login` (not `/api/auth/login`)
-2. Check token key: Should be `tenant_token` (not `token`)
-3. Check tenant status: Must be ACTIVE in Super Admin dashboard
-4. Check CORS: Backend allows Lucky Draw origin
-
-### Build Errors
-```bash
+npx prisma migrate deploy
 npx prisma generate
-npm run build
+npm run create-super-admin  # Creates admin@example.com / Admin@123
+cd ..
 ```
 
-### Database Issues
+### Build and Run
+
+#### Option 1: Using build scripts
 ```bash
-# Reset and reapply schema
-npx prisma db push --force-reset
-npx prisma generate
-```
+# Windows
+build.bat
 
----
+# Linux/Mac  
+chmod +x build.sh
+./build.sh
 
-## 📁 Project Structure
-
-```
-Super Admin/
-├── README.md (this file)
-├── docker-compose.yml
-│
-├── backend/
-│   ├── prisma/
-│   │   └── schema.prisma (single Tenant table)
-│   ├── src/
-│   │   ├── controllers/
-│   │   │   ├── auth.controller.ts
-│   │   │   ├── tenant-auth.controller.ts
-│   │   │   └── tenants.controller.ts
-│   │   ├── services/
-│   │   │   ├── auth.service.ts
-│   │   │   ├── tenant-auth.service.ts
-│   │   │   └── tenants.service.ts
-│   │   ├── middleware/
-│   │   │   ├── auth.middleware.ts
-│   │   │   └── tenant-auth.middleware.ts
-│   │   └── routes/
-│   ├── test-tenant-login.js
-│   ├── test-tenant-auth-quick.js
-│   └── check-users.js
-│
-└── frontend/
-    └── src/
-        ├── pages/
-        │   ├── SuperAdminLogin.tsx
-        │   ├── TenantsManagement.tsx
-        │   └── CreateTenant.tsx
-        └── services/
-```
-
----
-
-## 🔒 Security Features
-
-- **Password Hashing**: bcrypt
-- **WhatsApp Encryption**: AES-256-CBC
-- **JWT Tokens**: Separate for admin/tenant
-- **Activity Logging**: Complete audit trail
-- **Session Management**: Track active sessions
-- **Role-Based Access**: ADMIN and USER roles
-
----
-
-## 🚢 Deployment
-
-### Docker
-```bash
-docker-compose up -d
-```
-
-### Render.com
-```bash
-git push origin main
-# Configured in render.yaml
-```
-
-### Manual
-```bash
-# Backend
+# Run the unified application
 cd backend
-npm run build
-npm start
+node dist/app.js
+```
 
-# Frontend
+#### Option 2: Manual build
+```bash
+# Build frontend
 cd frontend
 npm run build
-# Serve dist/ folder with nginx
+cd ..
+
+# Copy frontend to backend
+rm -rf backend/public
+cp -r frontend/dist backend/public
+
+# Build backend
+cd backend  
+npm run build
+
+# Run unified application
+node dist/app.js
 ```
 
----
+The application will be available at **http://localhost:5001**
 
-## 📦 Tech Stack
+- Frontend: http://localhost:5001
+- API: http://localhost:5001/api/*
+- Health Check: http://localhost:5001/api/health
 
-- **Backend**: Node.js, Express, Prisma, PostgreSQL
-- **Frontend**: React, TypeScript, Vite, TailwindCSS
-- **Database**: PostgreSQL (Supabase)
-- **Auth**: JWT, bcrypt
-- **Encryption**: AES-256-CBC
+### Default Login
+- **Email:** admin@example.com
+- **Password:** Admin@123
 
----
+## 🐳 Docker Deployment
 
-## ✅ Setup Checklist
+### Local Docker Build
+```bash
+docker build -t super-admin-dashboard .
+docker run -p 5001:5001 -e DATABASE_URL="your-db-url" super-admin-dashboard
+```
 
-- [x] Install dependencies
-- [x] Configure .env
-- [x] Run `npx prisma db push`
-- [x] Run `npx prisma generate`
-- [x] Run `npm run build`
-- [x] Test with `node test-tenant-login.js`
-- [x] Start servers
-- [ ] Update Lucky Draw frontend endpoints
-- [ ] Test tenant login in Lucky Draw
+### Production Deployment (Render)
 
----
+The application is configured for single-service deployment on Render:
 
-## 🎯 Summary
+1. **Connect your repository to Render**
+2. **The `render.yaml` configures:**
+   - Single web service with Docker build
+   - PostgreSQL database
+   - Environment variables
+   - Health checks
 
-This is a multi-tenant SaaS platform with:
-- **Two separate authentication systems** (Super Admin + Tenant)
-- **Single Tenant table** with all fields for better performance
-- **Comprehensive tenant management** with full creation form
-- **Encrypted WhatsApp integration** for each tenant
-- **Complete audit trail** and activity logging
-- **Ready for production** with Docker configs
+3. **Required environment variables:**
+   - `DATABASE_URL` (auto-configured from database)
+   - `JWT_SECRET` (auto-generated)
+   - `ENCRYPTION_KEY` (auto-generated)
 
-**Key Point**: Tenant credentials created by Super Admin are for the Lucky Draw system, NOT the Super Admin dashboard!
+## 🏗️ Architecture
 
----
+### Unified Deployment Structure
+```
+├── Dockerfile              # Multi-stage build (frontend + backend)
+├── render.yaml             # Single service deployment config
+├── build.sh / build.bat    # Build automation scripts
+├── frontend/               # React TypeScript frontend
+│   ├── src/
+│   ├── dist/              # Build output (copied to backend/public)
+│   └── package.json
+├── backend/                # Node.js Express backend  
+│   ├── src/
+│   ├── dist/              # TypeScript build output
+│   ├── public/            # Frontend static files (from frontend/dist)
+│   ├── prisma/            # Database schema and migrations
+│   └── package.json
+└── docker-compose.yml      # Development environment
+```
+
+### Key Features
+- **Single Port:** Everything runs on port 5001
+- **Unified CORS:** No cross-origin issues
+- **Static Serving:** Backend serves frontend files
+- **API Routes:** All API endpoints under `/api/*`
+- **SPA Support:** Catch-all route for React Router
+
+## 🔧 Development
+
+For development, you can still run frontend and backend separately:
+
+```bash
+# Terminal 1: Backend (API only)
+cd backend
+npm run dev  # Runs on port 5001
+
+# Terminal 2: Frontend (with proxy)  
+cd frontend
+npm run dev  # Runs on port 5173, proxies API calls to :5001
+```
+
+## 📊 Features
+
+- **Multi-tenant Management:** Create and manage tenant organizations
+- **Role-based Access Control:** Granular permissions system
+- **Analytics Dashboard:** Comprehensive metrics and insights
+- **Security:** bcrypt password hashing, JWT authentication, AES-256 encryption
+- **Database:** PostgreSQL with Prisma ORM
+- **Responsive UI:** Modern React with Tailwind CSS
+
+## 🔐 Security
+
+- Passwords hashed with bcrypt (10 salt rounds)
+- JWT tokens for authentication
+- AES-256-CBC encryption for sensitive data
+- CORS protection
+- Input validation and sanitization
+
+## 📝 API Documentation
+
+### Authentication
+- `POST /api/auth/super-admin/login` - Super admin login
+- `POST /api/auth/logout` - Logout
+
+### Tenant Management  
+- `GET /api/tenants` - List all tenants
+- `POST /api/tenants/create` - Create new tenant
+- `PUT /api/tenants/:id` - Update tenant
+- `DELETE /api/tenants/:id` - Delete tenant
+
+### Analytics
+- `GET /api/analytics` - Dashboard statistics
+- `GET /api/analytics/health` - System health metrics
+
+### Health Check
+- `GET /api/health` - Application health status
+
+## 🚀 Deployment Notes
+
+### Environment Variables
+- `NODE_ENV=production` for production builds
+- `PORT=5001` (default, configurable)
+- `DATABASE_URL` for PostgreSQL connection
+- `JWT_SECRET` for token signing
+- `ENCRYPTION_KEY` for data encryption
+
+### Database Migrations
+```bash
+cd backend
+npx prisma migrate deploy  # Apply migrations
+npx prisma generate        # Generate client
+```
+
+### Monitoring
+- Health check endpoint: `/api/health`
+- Logs available via `docker logs` or Render dashboard
+- Database connection status in health response
 
 ## 📞 Support
 
-For issues:
-1. Check this README
-2. Run test scripts (`node test-tenant-login.js`)
-3. Check browser console and network tab
-4. Verify database schema with `npx prisma studio`
+For issues or questions:
+1. Check the health endpoint: `/api/health`
+2. Review application logs
+3. Verify database connectivity
+4. Ensure all environment variables are set
 
 ---
 
-**Ready to start!** Follow the Quick Setup section above. 🚀
+**Single Service Architecture** - Frontend and backend unified for simplified deployment and management.

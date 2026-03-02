@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/sessions';
+const API_URL = '/api/sessions';
 
 export interface Session {
   id: string;

@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api/backups';
+const API_URL = '/api/backups';
 
 export interface Backup {
   id: string;
