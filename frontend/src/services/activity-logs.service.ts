@@ -69,12 +69,14 @@ class ActivityLogsService {
   async exportLogs(filters?: {
     userId?: string;
     module?: string;
+    action?: string;
     startDate?: string;
     endDate?: string;
   }) {
     const params = new URLSearchParams();
     if (filters?.userId) params.append('userId', filters.userId);
     if (filters?.module) params.append('module', filters.module);
+    if (filters?.action) params.append('action', filters.action);
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
 

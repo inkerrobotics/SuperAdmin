@@ -803,7 +803,7 @@ export default function RolesManagement() {
                 Cancel
               </button>
               <button
-                onClick={() => handleDeleteConfirm(deleteRoleInfo && deleteRoleInfo.userCount > 0)}
+                onClick={() => handleDeleteConfirm(!!(deleteRoleInfo && deleteRoleInfo.userCount > 0))}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 {deleteRoleInfo && deleteRoleInfo.userCount > 0 ? 'Delete Role & Users' : 'Delete Role'}
