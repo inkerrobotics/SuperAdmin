@@ -80,6 +80,32 @@ app.get('/api/health', (req, res) => {
 // Serve static files from frontend build
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Debug endpoint to check if files exist
+app.get('/debug/files', (req, res) => {
+  const fs = require('fs');
+  const publicPath = path.join(__dirname, '../public');
+  
+  try {
+    const files = fs.readdirSync(publicPath);
+    const indexExists = fs.existsSync(path.join(publicPath, 'index.html'));
+    
+    res.json({
+      publicPath,
+      files,
+      indexExists,
+      __dirname,
+      cwd: process.cwd()
+    });
+  } catch (error) {
+    res.json({
+      error: error.message,
+      publicPath,
+      __dirname,
+      cwd: process.cwd()
+    });
+  }
+});
+
 // Catch-all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
   // Skip API routes
@@ -87,7 +113,21 @@ app.get('*', (req, res) => {
     return res.status(404).json({ error: 'API endpoint not found' });
   }
   
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  const indexPath = path.join(__dirname, '../public/index.html');
+  console.log(`Serving index.html from: ${indexPath}`);
+  
+  // Check if file exists before sending
+  const fs = require('fs');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ 
+      error: 'Frontend files not found',
+      path: indexPath,
+      __dirname,
+      cwd: process.cwd()
+    });
+  }
 });
 
 app.listen(PORT, () => {
