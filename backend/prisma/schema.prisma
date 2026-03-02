@@ -46,8 +46,6 @@ model Tenant {
   id                         String                   @id @default(uuid())
   tenantId                   String                   @unique
   name                       String
-  email                      String                   @unique
-  password                   String
   status                     TenantStatus             @default(PENDING)
   subscriptionPlan           String?
   
@@ -90,9 +88,9 @@ model Tenant {
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
   
-  // Super Admin Relations
+  // Relations
+  auth                       TenantAuth?
   users                      User[]
-  permissions                TenantPermission[]
   activityLogs               ActivityLog[]
   statusHistory              TenantStatusHistory[]
   
@@ -106,25 +104,40 @@ model Tenant {
   cardAllocations            card_allocation_audit[]  @relation("TenantCardAllocations")
   
   @@index([tenantId])
-  @@index([email])
   @@index([status])
   @@index([businessVerificationStatus])
 }
 
-model TenantPermission {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  module    String
-  canView   Boolean  @default(true)
-  canCreate Boolean  @default(true)
-  canEdit   Boolean  @default(true)
-  canDelete Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([tenantId, module])
+model TenantAuth {
+  id        String             @id @default(uuid())
+  tenantId  String             @unique
+  email     String             @unique
+  password  String
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  
+  // Relations
+  tenant      Tenant             @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+  permissions TenantPermission[]
+  
+  @@index([email])
   @@index([tenantId])
+}
+
+model TenantPermission {
+  id        String     @id @default(uuid())
+  authId    String
+  auth      TenantAuth @relation(fields: [authId], references: [id], onDelete: Cascade)
+  module    String
+  canView   Boolean    @default(true)
+  canCreate Boolean    @default(true)
+  canEdit   Boolean    @default(true)
+  canDelete Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([authId, module])
+  @@index([authId])
 }
 
 model TenantStatusHistory {
