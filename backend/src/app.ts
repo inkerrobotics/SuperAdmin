@@ -89,20 +89,39 @@ app.get('/debug/files', (req, res) => {
     const files = fs.readdirSync(publicPath);
     const indexExists = fs.existsSync(path.join(publicPath, 'index.html'));
     
-    res.json({
+    const debugInfo = {
       publicPath,
       files,
       indexExists,
       __dirname,
       cwd: process.cwd()
-    });
+    };
+    
+    // Return HTML for easier viewing
+    res.send(`
+      <html>
+        <head><title>Debug Info</title></head>
+        <body>
+          <h1>Debug Information</h1>
+          <pre>${JSON.stringify(debugInfo, null, 2)}</pre>
+        </body>
+      </html>
+    `);
   } catch (error: any) {
-    res.json({
-      error: error.message,
-      publicPath,
-      __dirname,
-      cwd: process.cwd()
-    });
+    res.send(`
+      <html>
+        <head><title>Debug Error</title></head>
+        <body>
+          <h1>Debug Error</h1>
+          <pre>${JSON.stringify({
+            error: error.message,
+            publicPath,
+            __dirname,
+            cwd: process.cwd()
+          }, null, 2)}</pre>
+        </body>
+      </html>
+    `);
   }
 });
 
