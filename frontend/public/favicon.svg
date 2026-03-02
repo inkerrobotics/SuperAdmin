@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <rect width="32" height="32" rx="6" fill="url(#gradient)"/>
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <!-- Admin Shield Icon -->
+  <path d="M16 4L8 8v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V8l-8-4z" fill="white" opacity="0.9"/>
+  <path d="M16 6L10 9v5c0 4.25 2.94 8.22 7 9.24 4.06-1.02 7-4.99 7-9.24V9l-6-3z" fill="url(#gradient)"/>
+  <!-- Crown/Admin Symbol -->
+  <path d="M12 12l2 3h4l2-3-1-1h-6l-1 1z" fill="white"/>
+  <circle cx="16" cy="18" r="1.5" fill="white"/>
+</svg>

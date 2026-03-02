@@ -1,14 +1,19 @@
 import { useState, ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import usePageTitle from '../hooks/usePageTitle';
 import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: ReactNode;
+  title?: string;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, title }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user } = useAuth();
+  
+  // Set page title dynamically
+  usePageTitle(title);
 
   const getUserInitials = () => {
     if (user?.name) {
