@@ -96,7 +96,7 @@ app.get('/debug/files', (req, res) => {
       __dirname,
       cwd: process.cwd()
     });
-  } catch (error) {
+  } catch (error: any) {
     res.json({
       error: error.message,
       publicPath,
