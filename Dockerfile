@@ -10,6 +10,9 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
+# Debug: List the contents of the dist directory
+RUN ls -la dist/
+
 # Backend stage
 FROM node:18-alpine AS backend-builder
 
@@ -59,6 +62,9 @@ COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/prisma ./prisma
 
 # Copy frontend build to backend's public directory
 COPY --from=frontend-builder --chown=nodejs:nodejs /app/frontend/dist ./public
+
+# Debug: List the contents of the public directory
+RUN ls -la public/
 
 # Switch to non-root user
 USER nodejs
