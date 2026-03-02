@@ -101,7 +101,7 @@ export class TenantAuthService {
       {
         tenantId: tenant.id,
         tenantIdentifier: tenant.tenantId,
-        email: tenant.email,
+        email: tenantAuth.email,
         type: 'tenant'
       },
       process.env.JWT_SECRET || 'your-secret-key',
@@ -125,7 +125,7 @@ export class TenantAuthService {
         id: tenant.id,
         tenantId: tenant.tenantId,
         name: tenant.name,
-        email: tenant.email,
+        email: tenantAuth.email,
         status: tenant.status,
         subscriptionPlan: tenant.subscriptionPlan,
         displayName: tenant.displayName,
@@ -141,7 +141,11 @@ export class TenantAuthService {
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       include: {
-        permissions: true
+        auth: {
+          include: {
+            permissions: true
+          }
+        }
       }
     });
 
