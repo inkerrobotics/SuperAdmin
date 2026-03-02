@@ -1,10 +1,10 @@
 # Multi-stage build for unified deployment
 FROM node:18-alpine AS frontend-builder
 
-# Install frontend dependencies
+# Install frontend dependencies (including devDependencies for build)
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy frontend source and build
 COPY frontend/ ./
@@ -16,10 +16,10 @@ FROM node:18-alpine AS backend-builder
 # Install system dependencies for Prisma and bcrypt
 RUN apk add --no-cache openssl libc6-compat
 
-# Install backend dependencies
+# Install backend dependencies (including devDependencies for build)
 WORKDIR /app/backend
 COPY backend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Copy backend source
 COPY backend/ ./
@@ -43,10 +43,18 @@ RUN adduser -S nodejs -u 1001
 # Set working directory
 WORKDIR /app
 
-# Copy backend build and dependencies
+# Copy package files and install only production dependencies
+COPY backend/package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy backend build
 COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/dist ./dist
-COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/node_modules ./node_modules
-COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/package*.json ./
+
+# Copy Prisma client (generated during build)
+COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/node_modules/.prisma ./node_modules/.prisma
+COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/node_modules/@prisma ./node_modules/@prisma
+
+# Copy Prisma schema for migrations
 COPY --from=backend-builder --chown=nodejs:nodejs /app/backend/prisma ./prisma
 
 # Copy frontend build to backend's public directory
